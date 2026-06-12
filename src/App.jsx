@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import LoginPage from './components/LoginPage';
 import Dashboard from './components/Dashboard';
 import FormComponent from './components/FormComponent';
@@ -7,27 +7,76 @@ import './App.css';
 
 function App() {
   const [screen, setScreen] = useState('login');
-  const [formDataList, setFormDataList] = useState([]);
-  const [activeTab, setActiveTab] = useState('form');
 
-  const handleLoginSuccess = () => {
-    setScreen('dashboard');
+  useEffect(() => {
+    const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+    const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
+    if (token && userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        const userRoles = user.roles || [];
+        if (
+          userRoles.includes('DEV') || 
+          userRoles.includes('SOFTWARE') || 
+          userRoles.includes('Administrator') || 
+          user.username?.toLowerCase() === 'admin'
+        ) {
+          setScreen('admin-dashboard');
+        } else {
+          setScreen('dashboard');
+        }
+      } catch {
+        localStorage.clear();
+        sessionStorage.clear();
+        setScreen('login');
+      }
+    }
+  }, []);
+
+  const handleLoginSuccess = (loginData) => {
+    const userRoles = loginData?.roles || [];
+    if (
+      userRoles.includes('DEV') || 
+      userRoles.includes('SOFTWARE') || 
+      userRoles.includes('Administrator') || 
+      loginData?.username?.toLowerCase() === 'admin'
+    ) {
+      setScreen('admin-dashboard');
+    } else {
+      setScreen('dashboard');
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    setScreen('login');
   };
 
   const handleNewInspection = () => {
     setScreen('form');
-    setActiveTab('form');
   };
 
-  const handleFormSubmit = (formData) => {
-    setFormDataList((prevList) => [
-      ...prevList,
-      { ...formData, id: Date.now() },
-    ]);
-    setScreen('dashboard');
-  };
-
-  const handleGoDashboard = () => {
+  const handleFormSubmit = () => {
+    // Check role to redirect to the correct screen
+    const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        const userRoles = user.roles || [];
+        if (
+          userRoles.includes('DEV') || 
+          userRoles.includes('SOFTWARE') || 
+          userRoles.includes('Administrator') || 
+          user.username?.toLowerCase() === 'admin'
+        ) {
+          setScreen('admin-dashboard');
+          return;
+        }
+      } catch {
+        // Fallback
+      }
+    }
     setScreen('dashboard');
   };
 
@@ -39,48 +88,17 @@ function App() {
     return <Dashboard onNewInspection={handleNewInspection} />;
   }
 
-  if (screen === 'form') {
+  if (screen === 'admin-dashboard') {
     return (
-      <div className="app">
-        <nav className="navbar">
-          <div className="nav-container">
-            <div className="nav-brand">
-              <h1>AutoCheck AML</h1>
-              <p>Formulario y Panel de Administración</p>
-            </div>
-            <div className="nav-tabs">
-              <button
-                className={`nav-btn ${activeTab === 'form' ? 'active' : ''}`}
-                onClick={() => setActiveTab('form')}
-              >
-                Formulario
-              </button>
-              <button
-                className={`nav-btn ${activeTab === 'admin' ? 'active' : ''}`}
-                onClick={() => setActiveTab('admin')}
-              >
-                Administración
-                {formDataList.length > 0 && (
-                  <span className="badge">{formDataList.length}</span>
-                )}
-              </button>
-            </div>
-          </div>
-        </nav>
-
-        <main className="main-content">
-          {activeTab === 'form' ? (
-            <FormComponent onSubmit={handleFormSubmit} />
-          ) : (
-            <AdminPanel data={formDataList} />
-          )}
-        </main>
-
-        <footer className="footer">
-          <p>&copy; 2024 AutoCheck AML. Todos los derechos reservados.</p>
-        </footer>
-      </div>
+      <AdminPanel 
+        onLogout={handleLogout} 
+        onNewInspection={handleNewInspection} 
+      />
     );
+  }
+
+  if (screen === 'form') {
+    return <FormComponent onSubmit={handleFormSubmit} />;
   }
 
   return null;

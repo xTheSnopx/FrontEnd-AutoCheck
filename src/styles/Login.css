@@ -397,11 +397,16 @@
   to { transform: rotate(360deg); }
 }
 
-/* ===== RESPONSIVE ===== */
 @media (max-width: 480px) {
+  .login-page {
+    padding: 16px 12px;
+    flex-direction: column;
+  }
+
   .login-page .login-card {
-    padding: 32px 24px 24px;
+    padding: 28px 20px 20px;
     border-radius: 12px;
+    max-width: 100%;
   }
 
   .login-page .login-title {
@@ -409,8 +414,10 @@
   }
 
   .login-page .support-fab {
-    bottom: 16px;
-    right: 16px;
-    padding: 10px 16px;
+    position: relative;
+    bottom: auto;
+    right: auto;
+    margin-top: 20px;
+    box-shadow: none;
   }
 }

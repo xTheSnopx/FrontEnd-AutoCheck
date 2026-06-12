@@ -76,7 +76,7 @@ const Spinner = () => <div className="spinner" aria-label="Cargando..." />;
 
 // ===== LOGIN PAGE =====
 export default function LoginPage({ onLoginSuccess }) {
-  const [formData, setFormData] = useState({ username: '', password: '', rememberMe: false });
+  const [formData, setFormData] = useState({ username: 'Admin', password: 'Admin2026', rememberMe: false });
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [globalError, setGlobalError] = useState('');
@@ -268,37 +268,7 @@ export default function LoginPage({ onLoginSuccess }) {
           </button>
         </form>
 
-        {/* DIVIDER */}
-        <div className="login-divider" style={{ marginTop: '28px' }} />
 
-        {/* FOOTER */}
-        <div className="login-footer">
-          <p className="login-register-text">
-            ¿Nuevo operador?{' '}
-            <button
-              type="button"
-              className="login-register-link"
-              onClick={() => alert('Contacte al administrador del sistema para solicitar acceso.')}
-            >
-              Solicitar Acceso
-            </button>
-          </p>
-
-          <div className="login-badges">
-          <div className="login-badge">
-            <IconCheckShield />
-            <span>Encriptado SSL</span>
-          </div>
-          <div className="login-badge">
-            <IconMonitor />
-            <span>Cumplimiento v1.0.4</span>
-          </div>
-          <div className="login-badge">
-            <IconMonitor />
-            <span>Cumplimiento v1.0.4</span>
-          </div>
-          </div>
-        </div>
       </div>
 
       {/* FLOATING SUPPORT BUTTON */}
