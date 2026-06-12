@@ -76,7 +76,7 @@ const Spinner = () => <div className="spinner" aria-label="Cargando..." />;
 
 // ===== LOGIN PAGE =====
 export default function LoginPage({ onLoginSuccess }) {
-  const [formData, setFormData] = useState({ username: 'Admin', password: 'Admin2026', rememberMe: false });
+  const [formData, setFormData] = useState({ username: '', password: '', rememberMe: false });
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [globalError, setGlobalError] = useState('');

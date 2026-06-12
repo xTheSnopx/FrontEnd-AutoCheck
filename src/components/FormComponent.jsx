@@ -3,6 +3,23 @@ import { formsApi } from '../api/forms.api';
 import '../styles/FormComponent.css';
 
 const FormComponent = ({ onSubmit }) => {
+  const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
+  let userRoles = [];
+  let userFullName = '';
+  if (userStr) {
+    try {
+      const parsed = JSON.parse(userStr);
+      userRoles = parsed.roles || [];
+      userFullName = parsed.fullName || parsed.username || '';
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  const isHsq = userRoles.includes('INGENIERO_HSQ');
+  const isCuadrilla = userRoles.includes('CUADRILLA');
+  const isReadOnly = isCuadrilla;
+
   // Estado para los campos del formulario
   // Mapeamos los campos a IDs (1 a 27) que coinciden con las semillas de la base de datos
   const [answers, setAnswers] = useState({
@@ -143,6 +160,7 @@ const FormComponent = ({ onSubmit }) => {
 
   // Actualizar respuestas
   const handleToggle = (fieldId, value) => {
+    if (isReadOnly) return;
     setAnswers((prev) => ({
       ...prev,
       [fieldId]: value,
@@ -211,19 +229,61 @@ const FormComponent = ({ onSubmit }) => {
   return (
     <div className="form-component-mobile">
       {/* ===== MOBILE HEADER ===== */}
-      <header className="form-mobile-header">
+      <header className="form-mobile-header" style={isHsq ? { background: '#d35400' } : isCuadrilla ? { background: '#2c3e50' } : {}}>
         <button type="button" className="menu-btn">
           <svg className="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
           <span className="menu-text">menu</span>
         </button>
         <h1 className="header-brand">AutoCheckAML</h1>
-        <div className="header-right">
+        <div className="header-right" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: '1.2' }}>
+            <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#fff' }}>{userFullName}</span>
+            <span style={{ fontSize: '9px', color: '#dfe6e9' }}>{userRoles.join(', ')}</span>
+          </div>
           <div className="avatar-circle">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           </div>
           <button type="button" className="logout-btn" onClick={() => { localStorage.clear(); sessionStorage.clear(); window.location.reload(); }}>logout</button>
         </div>
       </header>
+
+      {/* Cuadrilla Banner */}
+      {isCuadrilla && (
+        <div style={{
+          background: '#0984e3',
+          color: '#fff',
+          padding: '12px 16px',
+          textAlign: 'center',
+          fontWeight: 'bold',
+          fontSize: '14px',
+          borderBottom: '3px solid #076bba',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <span>👮</span> Modo Verificación de Cuadrilla (Lectura)
+        </div>
+      )}
+
+      {/* HSQ Banner */}
+      {isHsq && (
+        <div style={{
+          background: '#e67e22',
+          color: '#fff',
+          padding: '12px 16px',
+          textAlign: 'center',
+          fontWeight: 'bold',
+          fontSize: '14px',
+          borderBottom: '3px solid #d35400',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <span>🛡️</span> Vista de Cumplimiento de Seguridad (HSQ)
+        </div>
+      )}
 
       {/* ===== HEADER DE NAVEGACIÓN DE CATEGORÍAS (SCROLL RÁPIDO) ===== */}
       <div className="category-scroll-nav">
@@ -246,7 +306,7 @@ const FormComponent = ({ onSubmit }) => {
           className={`nav-tab ${activeSection === 'veh' ? 'active' : ''}`}
           onClick={() => scrollToSection('veh')}
         >
-          3. VEHÍCULO
+          {isHsq ? '3. SEGURIDAD' : '3. VEHÍCULO'}
         </button>
         <button
           type="button"
@@ -416,10 +476,12 @@ const FormComponent = ({ onSubmit }) => {
         </div>
 
         {/* ==================== SECCIÓN 3: VEHÍCULO ==================== */}
-        <div className="section-card" ref={sectionRefs.veh}>
-          <h2 className="section-title">3. SISTEMAS DEL VEHÍCULO</h2>
+        <div className="section-card" ref={sectionRefs.veh} style={isHsq ? { borderLeft: '4px solid #e67e22' } : {}}>
+          <h2 className="section-title">{isHsq ? '3. ACCESORIOS Y SEGURIDAD' : '3. SISTEMAS DEL VEHÍCULO'}</h2>
 
-          {/* Subsección: LUCES */}
+          {!isHsq && (
+            <>
+              {/* Subsección: LUCES */}
           <div className="subsection-header">
             <span className="sub-icon">💡</span>
             <span className="sub-title">LUCES</span>
@@ -633,6 +695,9 @@ const FormComponent = ({ onSubmit }) => {
             </div>
           </div>
 
+          </>
+          )}
+
           {/* Subsección: ACCESORIOS Y SEGURIDAD */}
           <div className="subsection-header">
             <span className="sub-icon">🛡️</span>
@@ -741,8 +806,10 @@ const FormComponent = ({ onSubmit }) => {
             </div>
           </div>
 
-          {/* Subsección: VIDRIOS */}
-          <div className="subsection-header">
+          {!isHsq && (
+            <>
+              {/* Subsección: VIDRIOS */}
+              <div className="subsection-header">
             <span className="sub-icon">🪟</span>
             <span className="sub-title">VIDRIOS</span>
           </div>
@@ -885,6 +952,9 @@ const FormComponent = ({ onSubmit }) => {
             </div>
           </div>
 
+          </>
+          )}
+
           {/* Observaciones Técnicas */}
           <div className="form-item-observations">
             <span className="observations-label">Observaciones Técnicas</span>
@@ -949,9 +1019,10 @@ const FormComponent = ({ onSubmit }) => {
         <button
           type="submit"
           className="submit-inspection-btn"
+          style={isCuadrilla ? { background: '#0984e3' } : {}}
           disabled={isSubmitting}
         >
-          {isSubmitting ? 'ENVIANDO...' : 'FINALIZAR Y ENVIAR INSPECCIÓN'}
+          {isSubmitting ? 'ENVIANDO...' : isCuadrilla ? 'CONFIRMAR Y VERIFICAR INSPECCIÓN' : 'FINALIZAR Y ENVIAR INSPECCIÓN'}
         </button>
       </form>
 
