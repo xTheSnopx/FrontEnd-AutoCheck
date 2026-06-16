@@ -42,7 +42,10 @@ const IconTruck = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
 );
 
-// Sidebar items icons
+const IconUsers = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+);
+
 const IconDashboard = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
 );
@@ -52,7 +55,7 @@ const IconActiveInspections = () => (
 );
 
 const IconFleet = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
 );
 
 const IconLog = () => (
@@ -74,9 +77,9 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
   const [filterPlaca, setFilterPlaca] = useState('');
   const [filterEstado, setFilterEstado] = useState('Todos los estados');
   
-  // Navigation states
-  const [activeView, setActiveView] = useState('panel'); // 'panel' | 'users'
-  const [userSubTab, setUserSubTab] = useState('list'); // 'list' | 'roles'
+  // Navigation tabs: 'panel' | 'users' | 'inspecciones' | 'flota' | 'bitacora' | 'reportes' | 'config'
+  const [activeView, setActiveView] = useState('panel');
+  const [currentUser, setCurrentUser] = useState(null);
   
   // User / Role / Permission lists
   const [users, setUsers] = useState([]);
@@ -98,16 +101,48 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
   // Matrix Role selection
   const [selectedRoleId, setSelectedRoleId] = useState(1);
 
-  // High quality seeded/mock data to match user screenshot
-  const [inspections, setInspections] = useState([
-    { id: 1, fecha: '2023-11-20 08:30', placa: 'FLT-8821', operador: 'Carlos Mendoza', observaciones: 'Presión de neumáticos revisada...', estado: 'OPERATIVO' },
-    { id: 2, fecha: '2023-11-20 09:15', placa: 'FLT-3349', operador: 'Elena Rodriguez', observaciones: 'Cambio de aceite programado...', estado: 'PROGRAMADO' },
-    { id: 3, fecha: '2023-11-19 16:45', placa: 'FLT-9902', operador: 'Jorge Silva', observaciones: 'Falla crítica en sistema de frenos', estado: 'INOPERATIVO' },
-    { id: 4, fecha: '2023-11-19 14:20', placa: 'FLT-5512', operador: 'Marcos Paz', observaciones: 'Inspección rutinaria exitosa', estado: 'OPERATIVO' },
-    { id: 5, fecha: '2023-11-19 11:05', placa: 'FLT-1120', operador: 'Lucía Méndez', observaciones: 'Limpieza profunda de cabina', estado: 'OPERATIVO' }
-  ]);
+  const [inspections, setInspections] = useState([]);
 
   const [filteredInspections, setFilteredInspections] = useState(inspections);
+
+  // Notifications state
+  const [notifications, setNotifications] = useState([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  // Submissions state
+  const [submissions, setSubmissions] = useState([]);
+  const [selectedSubmission, setSelectedSubmission] = useState(null);
+  const [showSubmissionModal, setShowSubmissionModal] = useState(false);
+  const [submissionComments, setSubmissionComments] = useState('');
+  const [rectifierObservations, setRectifierObservations] = useState('');
+  const [requiresReview, setRequiresReview] = useState(false);
+
+  // Crews State
+  const [crews, setCrews] = useState([]);
+  const [showCrewModal, setShowCrewModal] = useState(false);
+  const [selectedCrew, setSelectedCrew] = useState(null);
+  const [showMembersModal, setShowMembersModal] = useState(false);
+  const [crewFormData, setCrewFormData] = useState({
+    name: '',
+    description: '',
+    department: '',
+    location: '',
+    managedByUserId: ''
+  });
+
+  // Local Session Audit Timeline simulation
+  const [auditLogs, setAuditLogs] = useState([]);
+
+  const addAuditLog = (action, detail) => {
+    const newLog = {
+      id: Date.now(),
+      action,
+      detail,
+      user: currentUser?.username || 'Admin',
+      date: new Date().toLocaleString('es-ES', { hour12: false }).replace(',', '')
+    };
+    setAuditLogs(prev => [newLog, ...prev]);
+  };
 
   const fetchUsers = async () => {
     try {
@@ -157,81 +192,118 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
     }
   };
 
-  // Fetch data from actual API if available
-  useEffect(() => {
-    const fetchSubmissions = async () => {
-      try {
-        const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-        if (!token) return;
-
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/FormSubmissions?pageSize=100`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data && data.items && data.items.length > 0) {
-            // Map API structure to table layout
-            const apiInspections = data.items.map(sub => {
-              // Find plate (Placa) and observations if they exist in responses
-              let plate = 'N/A';
-              let observations = sub.observations || 'Sin observaciones';
-              
-              if (sub.responses && Array.isArray(sub.responses)) {
-                // Try to guess from responses if available
-                const plateResp = sub.responses.find(r => r.label && r.label.toLowerCase().includes('placa'));
-                if (plateResp) plate = plateResp.value;
-              }
-              
-              return {
-                id: sub.id,
-                fecha: new Date(sub.submittedAt || sub.createdAt).toLocaleString('es-ES', {
-                  year: 'numeric',
-                  month: '2-digit',
-                  day: '2-digit',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                }),
-                placa: plate !== 'N/A' ? plate : 'FLT-' + (1000 + (sub.id % 9000)), // dynamic plates
-                operador: sub.submittedByUserName || sub.userFullName || 'Operador AutoCheck',
-                observaciones: observations,
-                estado: sub.status === 'Approved' ? 'OPERATIVO' : sub.status === 'Pending' ? 'PROGRAMADO' : 'INOPERATIVO'
-              };
-            });
-
-            // Merge API items, avoiding duplicates
-            setInspections(prev => {
-              const combined = [...apiInspections];
-              // Fill with mock items if we have less than 5
-              if (combined.length < 5) {
-                prev.forEach(mockItem => {
-                  if (!combined.some(c => c.placa === mockItem.placa)) {
-                    combined.push(mockItem);
-                  }
-                });
-              }
-              return combined;
-            });
-          }
-        }
-      } catch (err) {
-        console.error('Error fetching submissions:', err);
+  const fetchCrews = async () => {
+    try {
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+      if (!token) return;
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/Crews`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCrews(data || []);
       }
-    };
+    } catch (err) {
+      console.error('Error fetching crews:', err);
+    }
+  };
 
-    fetchSubmissions();
+  const fetchSubmissionsData = async () => {
+    try {
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+      if (!token) return;
+
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/FormSubmissions?pageSize=100`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.items) {
+          setSubmissions(data.items);
+          
+          const apiInspections = data.items.map(sub => {
+            let plate = 'N/A';
+            let observations = sub.observationsByRespondent || 'Sin observaciones';
+            
+            if (sub.answers && Array.isArray(sub.answers)) {
+              const plateResp = sub.answers.find(r => r.formFieldLabel && r.formFieldLabel.toLowerCase().includes('placa'));
+              if (plateResp) plate = plateResp.fieldValue;
+            }
+            
+            return {
+              id: sub.id,
+              fecha: new Date(sub.createdAt).toLocaleString('es-ES', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+              }),
+              placa: plate !== 'N/A' ? plate : 'FLT-' + (1000 + (sub.id % 9000)),
+              operador: sub.submittedByUserName || 'Operador',
+              observaciones: observations,
+              estado: sub.status === 'Approved' ? 'OPERATIVO' : sub.status === 'Pending' ? 'PROGRAMADO' : 'INOPERATIVO',
+              answers: sub.answers || []
+            };
+          });
+
+          setInspections(apiInspections);
+
+          // Sync notifications for new submissions
+          const newNotifications = data.items.map(sub => {
+            let plate = 'N/A';
+            if (sub.answers && Array.isArray(sub.answers)) {
+              const plateResp = sub.answers.find(r => r.formFieldLabel && r.formFieldLabel.toLowerCase().includes('placa'));
+              if (plateResp) plate = plateResp.fieldValue;
+            }
+            return {
+              id: sub.id,
+              title: sub.status === 'Pending' ? 'Inspección Pendiente' : 'Nueva Inspección',
+              message: `Vehículo: ${plate !== 'N/A' ? plate : 'FLT-' + (1000 + (sub.id % 9000))}. Diligenciado por ${sub.submittedByUserName || 'Operador'}.`,
+              time: new Date(sub.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+              read: false,
+              submissionId: sub.id
+            };
+          });
+
+          setNotifications(prev => {
+            const updated = [...prev];
+            newNotifications.forEach(newN => {
+              if (!updated.some(x => x.id === newN.id)) {
+                updated.unshift(newN);
+              }
+            });
+            return updated;
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching submissions:', err);
+    }
+  };
+
+  // Check user details
+  useEffect(() => {
+    const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
+    if (userStr) {
+      try {
+        setCurrentUser(JSON.parse(userStr));
+      } catch (err) {
+        console.error(err);
+      }
+    }
     fetchUsers();
     fetchRoles();
     fetchPermissions();
+    fetchCrews();
+    fetchSubmissionsData();
   }, [activeView]);
 
   // Filter effect
   useEffect(() => {
     let result = inspections;
 
-    // Global Search Query
     if (searchQuery.trim() !== '') {
       const q = searchQuery.toLowerCase();
       result = result.filter(item => 
@@ -241,24 +313,37 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
       );
     }
 
-    // Placa Filter
     if (filterPlaca.trim() !== '') {
       const p = filterPlaca.toLowerCase();
       result = result.filter(item => item.placa.toLowerCase().includes(p));
     }
 
-    // Estado Filter
     if (filterEstado !== 'Todos los estados') {
       result = result.filter(item => item.estado === filterEstado.toUpperCase());
     }
 
-    // Fecha Filter
     if (filterDate) {
       result = result.filter(item => item.fecha.startsWith(filterDate));
     }
 
     setFilteredInspections(result);
   }, [searchQuery, filterDate, filterPlaca, filterEstado, inspections]);
+
+  const hasPermission = (permissionName) => {
+    if (!currentUser) return false;
+    const userRoles = currentUser.roles || [];
+    if (userRoles.includes('DEV') || userRoles.includes('SOFTWARE') || currentUser.username?.toLowerCase() === 'admin') {
+      return true;
+    }
+    const perms = currentUser.permissions || [];
+    return perms.includes(permissionName);
+  };
+
+  const hasRole = (roleName) => {
+    if (!currentUser) return false;
+    const userRoles = currentUser.roles || [];
+    return userRoles.includes(roleName) || userRoles.includes('DEV') || userRoles.includes('SOFTWARE') || currentUser.username?.toLowerCase() === 'admin';
+  };
 
   const handleClearFilters = () => {
     setFilterDate('');
@@ -272,9 +357,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
       const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
       if (token) {
         const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/FormSubmissions/export/excel`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+          headers: { 'Authorization': `Bearer ${token}` }
         });
         if (response.ok) {
           const blob = await response.blob();
@@ -285,6 +368,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
           document.body.appendChild(a);
           a.click();
           a.remove();
+          addAuditLog('EXPORT', 'Exportación de reporte de inspecciones a Excel');
           return;
         }
       }
@@ -292,20 +376,22 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
       console.error(err);
     }
 
-    // Fallback simple CSV download
-    let csvContent = 'data:text/csv;charset=utf-8,FECHA,PLACA,OPERADOR,OBSERVACIONES,ESTADO\n';
+    // Fallback simple CSV download - prefix with sep=, so Excel respects separators
+    let csvContent = 'sep=,\nFECHA,PLACA,OPERADOR,OBSERVACIONES,ESTADO\n';
     filteredInspections.forEach(item => {
       csvContent += `"${item.fecha}","${item.placa}","${item.operador}","${item.observaciones}","${item.estado}"\n`;
     });
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
+    link.setAttribute('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent));
     link.setAttribute('download', 'inspecciones_recientes.csv');
     document.body.appendChild(link);
     link.click();
     link.remove();
+    addAuditLog('EXPORT', 'Exportación de reporte local a CSV');
   };
   
+  // Users actions
   const handleOpenCreateModal = () => {
     setModalMode('create');
     setSelectedUser(null);
@@ -314,7 +400,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
       email: '',
       fullName: '',
       password: '',
-      roleId: '3' // Default to INGENIERO_MECANICO (role 3)
+      roleId: '3'
     });
     setShowUserModal(true);
   };
@@ -322,7 +408,6 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
   const handleOpenEditModal = (user) => {
     setModalMode('edit');
     setSelectedUser(user);
-    // Find current role id
     let userRoleId = '3';
     if (user.roles && user.roles.length > 0) {
       const currentRole = roles.find(r => r.name === user.roles[0]);
@@ -332,7 +417,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
       username: user.username,
       email: user.email,
       fullName: user.fullName,
-      password: '', // Empty password for edit
+      password: '',
       roleId: userRoleId
     });
     setShowUserModal(true);
@@ -369,6 +454,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
             });
           }
           alert('Usuario creado exitosamente');
+          addAuditLog('USER_CREATE', `Usuario creado: ${userFormData.username} (${userFormData.fullName})`);
           setShowUserModal(false);
           fetchUsers();
         } else {
@@ -409,6 +495,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
             });
           }
           alert('Usuario actualizado exitosamente');
+          addAuditLog('USER_UPDATE', `Usuario actualizado: ${userFormData.username}`);
           setShowUserModal(false);
           fetchUsers();
         } else {
@@ -433,6 +520,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
       });
       if (res.ok) {
         alert('Usuario eliminado exitosamente');
+        addAuditLog('USER_DELETE', `Usuario ID ${userId} eliminado`);
         fetchUsers();
       } else {
         alert('No se pudo eliminar el usuario');
@@ -455,12 +543,248 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
       });
       
       if (res.ok) {
+        addAuditLog('PERMISSION_CHANGE', `Permiso ${permissionId} ${hasPermission ? 'revocado de' : 'otorgado a'} rol ${roleId}`);
         fetchRoles();
       } else {
-        alert('No tiene permisos (DEV únicamente) para modificar los permisos de este rol o el endpoint falló.');
+        alert('No tiene permisos para modificar los permisos de este rol o el endpoint falló.');
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  // Crews Actions
+  const handleOpenCrewModal = () => {
+    setCrewFormData({
+      name: '',
+      description: '',
+      department: '',
+      location: '',
+      managedByUserId: users[0]?.id || ''
+    });
+    setShowCrewModal(true);
+  };
+
+  const handleSaveCrew = async (e) => {
+    e.preventDefault();
+    try {
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+      if (!token) return;
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      
+      const res = await fetch(`${apiUrl}/Crews`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: crewFormData.name,
+          description: crewFormData.description,
+          department: crewFormData.department,
+          location: crewFormData.location,
+          managedByUserId: parseInt(crewFormData.managedByUserId)
+        })
+      });
+
+      if (res.ok) {
+        alert('Cuadrilla creada exitosamente');
+        addAuditLog('CREW_CREATE', `Cuadrilla creada: ${crewFormData.name}`);
+        setShowCrewModal(false);
+        fetchCrews();
+      } else {
+        const data = await res.json();
+        alert(`Error: ${data.message || 'No se pudo crear la cuadrilla'}`);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleOpenMembersModal = (crew) => {
+    setSelectedCrew(crew);
+    setShowMembersModal(true);
+  };
+
+  const handleAddMemberToCrew = async (userId) => {
+    if (!selectedCrew) return;
+    try {
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const res = await fetch(`${apiUrl}/Crews/${selectedCrew.id}/members/${userId}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        alert('Miembro agregado');
+        fetchCrews();
+        fetchUsers();
+        // refresh selected crew
+        const updatedRes = await fetch(`${apiUrl}/Crews/${selectedCrew.id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (updatedRes.ok) {
+          const updatedCrew = await updatedRes.json();
+          setSelectedCrew(updatedCrew);
+        }
+      } else {
+        alert('Error al agregar miembro');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleRemoveMemberFromCrew = async (userId) => {
+    if (!selectedCrew) return;
+    try {
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const res = await fetch(`${apiUrl}/Crews/${selectedCrew.id}/members/${userId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        alert('Miembro removido');
+        fetchCrews();
+        fetchUsers();
+        // refresh selected crew
+        const updatedRes = await fetch(`${apiUrl}/Crews/${selectedCrew.id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (updatedRes.ok) {
+          const updatedCrew = await updatedRes.json();
+          setSelectedCrew(updatedCrew);
+        }
+      } else {
+        alert('Error al remover miembro');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Submissions state updates
+  const handleOpenSubmissionDetail = async (id) => {
+    try {
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const res = await fetch(`${apiUrl}/FormSubmissions/${id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const details = await res.json();
+        setSelectedSubmission(details);
+        setSubmissionComments('');
+        setRectifierObservations(details.observationsByRectifier || '');
+        setRequiresReview(details.requiresReview || false);
+        setShowSubmissionModal(true);
+      } else {
+        // Fallback using mock list item details
+        const mockItem = inspections.find(i => i.id === id);
+        if (mockItem) {
+          setSelectedSubmission(mockItem);
+          setShowSubmissionModal(true);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUpdateStatus = async (status) => {
+    if (!selectedSubmission) return;
+    let success = false;
+    try {
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const res = await fetch(`${apiUrl}/FormSubmissions/${selectedSubmission.id}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          status: status,
+          comment: submissionComments
+        })
+      });
+      if (res.ok) {
+        success = true;
+      }
+    } catch (err) {
+      console.error(err);
+    }
+
+    const stateStatus = status === 'Approved' ? 'OPERATIVO' : status === 'Rejected' ? 'INOPERATIVO' : 'PROGRAMADO';
+
+    if (success) {
+      alert(`Estado actualizado a ${status} exitosamente.`);
+      addAuditLog('SUBMISSION_STATUS', `Inspección ID ${selectedSubmission.id} marcada como ${status}`);
+      setShowSubmissionModal(false);
+      fetchSubmissionsData();
+    } else {
+      // Fallback local update for mocked data
+      setInspections(prev => prev.map(item => {
+        if (item.id === selectedSubmission.id) {
+          return {
+            ...item,
+            estado: stateStatus,
+            observaciones: submissionComments || item.observaciones
+          };
+        }
+        return item;
+      }));
+      alert(`Estado de inspección local actualizado a ${stateStatus} (Modo Fallback).`);
+      addAuditLog('SUBMISSION_STATUS', `Inspección ID ${selectedSubmission.id} marcada como ${status} (Local)`);
+      setShowSubmissionModal(false);
+    }
+  };
+
+  const handleVerifySubmission = async () => {
+    if (!selectedSubmission) return;
+    let success = false;
+    try {
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const res = await fetch(`${apiUrl}/FormSubmissions/${selectedSubmission.id}/verify`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          observationsByRectifier: rectifierObservations,
+          requiresReview: requiresReview
+        })
+      });
+      if (res.ok) {
+        success = true;
+      }
+    } catch (err) {
+      console.error(err);
+    }
+
+    if (success) {
+      alert('Inspección verificada por cuadrilla exitosamente.');
+      addAuditLog('SUBMISSION_VERIFY', `Inspección ID ${selectedSubmission.id} verificada por Cuadrilla`);
+      setShowSubmissionModal(false);
+      fetchSubmissionsData();
+    } else {
+      // Fallback local update for mocked data
+      setInspections(prev => prev.map(item => {
+        if (item.id === selectedSubmission.id) {
+          return {
+            ...item,
+            observaciones: rectifierObservations || item.observaciones,
+            estado: 'OPERATIVO'
+          };
+        }
+        return item;
+      }));
+      alert('Inspección verificada exitosamente (Modo Fallback).');
+      addAuditLog('SUBMISSION_VERIFY', `Inspección ID ${selectedSubmission.id} verificada por Cuadrilla (Local)`);
+      setShowSubmissionModal(false);
     }
   };
 
@@ -481,33 +805,50 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
             <IconDashboard />
             <span>Panel</span>
           </a>
-          <a href="#usuarios" className={`menu-item ${activeView === 'users' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveView('users'); }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '2px' }}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            <span>Gestión de Usuarios</span>
-          </a>
-          <a href="#inspecciones" className="menu-item" onClick={(e) => { e.preventDefault(); alert('Módulo Inspecciones Activas próximamente'); }}>
-            <IconActiveInspections />
-            <span>Inspecciones Activas</span>
-          </a>
-          <a href="#flota" className="menu-item" onClick={(e) => { e.preventDefault(); alert('Módulo Registro de Flota próximamente'); }}>
-            <IconFleet />
-            <span>Registro de Flota</span>
-          </a>
-          <a href="#bitacora" className="menu-item" onClick={(e) => { e.preventDefault(); alert('Módulo Bitácora de Mantenimiento próximamente'); }}>
-            <IconLog />
-            <span>Bitácora de Mantenimiento</span>
-          </a>
-          <a href="#reportes" className="menu-item" onClick={(e) => { e.preventDefault(); alert('Módulo Reportes próximamente'); }}>
-            <IconReports />
-            <span>Reportes</span>
-          </a>
+          
+          {hasPermission('VIEW_USER') && (
+            <a href="#usuarios" className={`menu-item ${activeView === 'users' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveView('users'); }}>
+              <IconUsers />
+              <span>Gestión de Usuarios</span>
+            </a>
+          )}
+          
+          {(hasPermission('VIEW_FORM') || hasRole('INGENIERO_MECANICO') || hasRole('INGENIERO_HSQ')) && (
+            <a href="#inspecciones" className={`menu-item ${activeView === 'inspecciones' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveView('inspecciones'); }}>
+              <IconActiveInspections />
+              <span>Inspecciones Activas</span>
+            </a>
+          )}
+          
+          {hasPermission('VIEW_CREW') && (
+            <a href="#flota" className={`menu-item ${activeView === 'flota' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveView('flota'); }}>
+              <IconFleet />
+              <span>Registro de Cuadrillas</span>
+            </a>
+          )}
+          
+          {hasPermission('VIEW_FORM') && (
+            <a href="#bitacora" className={`menu-item ${activeView === 'bitacora' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveView('bitacora'); }}>
+              <IconLog />
+              <span>Bitácora Mantenimiento</span>
+            </a>
+          )}
+          
+          {hasPermission('VIEW_REPORTS') && (
+            <a href="#reportes" className={`menu-item ${activeView === 'reportes' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveView('reportes'); }}>
+              <IconReports />
+              <span>Reportes</span>
+            </a>
+          )}
         </nav>
 
         <div className="sidebar-footer">
-          <a href="#config" className="menu-item" onClick={(e) => { e.preventDefault(); alert('Módulo Configuración próximamente'); }}>
-            <IconGear />
-            <span>Configuración</span>
-          </a>
+          {hasPermission('MANAGE_ROLES') && (
+            <a href="#config" className={`menu-item ${activeView === 'config' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveView('config'); }}>
+              <IconGear />
+              <span>Configuración</span>
+            </a>
+          )}
           <a href="#soporte" className="menu-item" onClick={(e) => { e.preventDefault(); alert('Soporte técnico: soporte@autocheckaml.com'); }}>
             <IconSupport />
             <span>Soporte</span>
@@ -544,21 +885,141 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
               />
             </div>
 
-            <button className="icon-notification-btn" aria-label="Notificaciones">
-              <IconBell />
-              <span className="badge-dot"></span>
-            </button>
+            <div className="notification-bell-container" style={{ position: 'relative' }}>
+              <button 
+                className="icon-notification-btn" 
+                aria-label="Notificaciones" 
+                onClick={() => setNotificationsOpen(!notificationsOpen)}
+              >
+                <IconBell />
+                {notifications.some(n => !n.read) && <span className="badge-dot"></span>}
+              </button>
 
-            <button className="icon-setting-btn" aria-label="Ajustes">
+              {notificationsOpen && (
+                <div className="notifications-dropdown" style={{
+                  position: 'absolute',
+                  right: 0,
+                  top: '45px',
+                  width: '320px',
+                  backgroundColor: 'var(--admin-white)',
+                  border: '1px solid var(--admin-border)',
+                  borderRadius: '12px',
+                  boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)',
+                  zIndex: 300,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  maxHeight: '400px',
+                  fontFamily: 'inherit'
+                }}>
+                  <div className="dropdown-header" style={{
+                    padding: '12px 16px',
+                    borderBottom: '1px solid var(--admin-border)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    backgroundColor: '#f8fafc',
+                    borderTopLeftRadius: '12px',
+                    borderTopRightRadius: '12px'
+                  }}>
+                    <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--admin-primary)' }}>Notificaciones</span>
+                    {notifications.some(n => !n.read) && (
+                      <button 
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--admin-primary)',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          textDecoration: 'underline',
+                          padding: 0
+                        }}
+                        onClick={() => {
+                          setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+                          addAuditLog('NOTIFICATION', 'Marcadas todas las notificaciones como leídas');
+                        }}
+                      >
+                        Marcar todo leído
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="dropdown-body" style={{
+                    overflowY: 'auto',
+                    flex: 1,
+                    display: 'flex',
+                    flexDirection: 'column'
+                  }}>
+                    {notifications.map(n => (
+                      <div 
+                        key={n.id} 
+                        className={`notification-item ${n.read ? 'read' : 'unread'}`}
+                        style={{
+                          padding: '12px 16px',
+                          borderBottom: '1px solid #f1f5f9',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                          backgroundColor: n.read ? '#fff' : '#f0f7ff',
+                          cursor: 'pointer',
+                          transition: 'background-color 0.2s'
+                        }}
+                        onClick={() => {
+                          handleOpenSubmissionDetail(n.submissionId);
+                          setNotificationsOpen(false);
+                          setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x));
+                        }}
+                      >
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1, paddingRight: '8px', textAlign: 'left' }}>
+                          <span style={{ fontWeight: n.read ? 500 : 700, fontSize: '13px', color: 'var(--admin-text-main)' }}>{n.title}</span>
+                          <span style={{ fontSize: '12px', color: 'var(--admin-text-muted)', lineHeight: '1.4' }}>{n.message}</span>
+                          <span style={{ fontSize: '10px', color: 'var(--admin-text-muted)', marginTop: '2px' }}>{n.time}</span>
+                        </div>
+                        
+                        <button 
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            padding: '4px',
+                            borderRadius: '4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: n.read ? '#cbd5e1' : 'var(--admin-primary)',
+                            transition: 'color 0.2s',
+                            marginTop: '2px'
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, read: !x.read } : x));
+                          }}
+                          title={n.read ? "Marcar como no leído" : "Marcar como leído"}
+                        >
+                          {n.read ? (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/></svg>
+                          ) : (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/></svg>
+                          )}
+                        </button>
+                      </div>
+                    ))}
+                    {notifications.length === 0 && (
+                      <div style={{ padding: '30px', textAlign: 'center', color: 'var(--admin-text-muted)', fontSize: '13px', fontStyle: 'italic' }}>
+                        No tienes notificaciones
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button className="icon-setting-btn" aria-label="Ajustes" onClick={() => hasPermission('MANAGE_ROLES') && setActiveView('config')}>
               <IconGear />
             </button>
 
-            <div className="admin-profile-box">
-              <img 
-                src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=100" 
-                alt="Administrador" 
-                className="profile-img"
-              />
+            <div className="admin-profile-box" style={{ borderLeft: '1px solid var(--admin-border)', paddingLeft: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--admin-text-main)' }}>{currentUser?.fullName || 'Administrador'}</span>
               <button className="logout-btn" onClick={onLogout}>Cerrar Sesión</button>
             </div>
           </div>
@@ -566,39 +1027,50 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
 
         {/* ===== DASHBOARD BODY ===== */}
         <main className="admin-content-body">
-          {activeView === 'panel' ? (
+          {activeView === 'panel' && (
             <>
               {/* ===== KPI METRIC CARDS ===== */}
               <section className="kpi-grid">
                 <div className="kpi-card">
-                  <span className="kpi-label">FLOTA ACTIVA</span>
+                  <span className="kpi-label">VEHÍCULOS REGISTRADOS</span>
                   <div className="kpi-value-row">
-                    <span className="kpi-number">124</span>
-                    <span className="kpi-trend positive">↑ 4%</span>
+                    <span className="kpi-number">{new Set(inspections.map(i => i.placa)).size}</span>
                   </div>
                 </div>
 
                 <div className="kpi-card">
-                  <span className="kpi-label">INSPECCIONES HOY</span>
+                  <span className="kpi-label">INSPECCIONES TOTALES</span>
                   <div className="kpi-value-row">
-                    <span className="kpi-number">42 <span className="kpi-sub">/ 50 metas</span></span>
+                    <span className="kpi-number">{inspections.length} <span className="kpi-sub">registros</span></span>
                   </div>
                 </div>
 
                 <div className="kpi-card">
-                  <span className="kpi-label">EN MANTENIMIENTO</span>
+                  <span className="kpi-label">EN MANTENIMIENTO (INOP)</span>
                   <div className="kpi-value-row">
-                    <span className="kpi-number">08</span>
-                    <span className="kpi-badge-alert">ALERTA</span>
+                    <span className="kpi-number">
+                      {inspections.filter(i => i.estado === 'INOPERATIVO').length}
+                    </span>
+                    {inspections.filter(i => i.estado === 'INOPERATIVO').length > 0 && (
+                      <span className="kpi-badge-alert">ALERTA</span>
+                    )}
                   </div>
                 </div>
 
                 <div className="kpi-card">
-                  <span className="kpi-label">DISPONIBILIDAD</span>
+                  <span className="kpi-label">DISPONIBILIDAD DE VEHÍCULOS</span>
                   <div className="kpi-value-row flex-column">
-                    <span className="kpi-number">92%</span>
+                    <span className="kpi-number">
+                      {inspections.length > 0 
+                        ? Math.round(((inspections.filter(i => i.estado !== 'INOPERATIVO').length) / inspections.length) * 100) 
+                        : 100}%
+                    </span>
                     <div className="kpi-progress-container">
-                      <div className="kpi-progress-bar" style={{ width: '92%' }}></div>
+                      <div className="kpi-progress-bar" style={{ 
+                        width: `${inspections.length > 0 
+                          ? ((inspections.filter(i => i.estado !== 'INOPERATIVO').length) / inspections.length) * 100 
+                          : 100}%` 
+                      }}></div>
                     </div>
                   </div>
                 </div>
@@ -625,7 +1097,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
                       <span className="field-icon"><IconTruck /></span>
                       <input 
                         type="text" 
-                        placeholder="EJ. ABC-124" 
+                        placeholder="EJ. FLT-8821" 
                         value={filterPlaca}
                         onChange={(e) => setFilterPlaca(e.target.value)}
                       />
@@ -655,10 +1127,10 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
               {/* ===== INSPECTIONS TABLE CARD ===== */}
               <section className="inspections-table-card">
                 <div className="table-card-header">
-                  <h2>Inspecciones Recientes</h2>
+                  <h2>Resumen de Inspecciones Recientes</h2>
                   <div className="table-header-actions">
                     <button className="btn-export-csv" onClick={handleExportCSV}>
-                      <IconDownload /> Exportar CSV
+                      <IconDownload /> Exportar Excel
                     </button>
                     <button className="btn-new-inspection-dark" onClick={onNewInspection}>
                       <IconPlus /> Nueva Inspección
@@ -691,11 +1163,8 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
                             </span>
                           </td>
                           <td className="cell-acciones">
-                            <button className="btn-action-view" title="Ver detalle" onClick={() => alert(`Detalle de inspección para placa: ${item.placa}`)}>
+                            <button className="btn-action-view" title="Ver detalle" onClick={() => handleOpenSubmissionDetail(item.id)}>
                               <IconEye />
-                            </button>
-                            <button className="btn-action-edit" title="Editar" onClick={() => alert(`Editar inspección para placa: ${item.placa}`)}>
-                              <IconPencil />
                             </button>
                           </td>
                         </tr>
@@ -710,81 +1179,269 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
                     </tbody>
                   </table>
                 </div>
-
-                {/* Pagination */}
-                <div className="table-footer-pagination">
-                  <span className="pagination-info">
-                    Mostrando 1 - {filteredInspections.length} de {filteredInspections.length} registros
-                  </span>
-                  <div className="pagination-buttons">
-                    <button className="page-btn disabled" disabled>&lt;</button>
-                    <button className="page-btn active">1</button>
-                    <button className="page-btn">2</button>
-                    <button className="page-btn">3</button>
-                    <button className="page-btn">&gt;</button>
-                  </div>
-                </div>
               </section>
             </>
-          ) : (
+          )}
+
+          {activeView === 'users' && hasPermission('VIEW_USER') && (
             <div className="users-management-view">
-              <div className="admin-subtabs-row">
-                <button className={`subtab-btn ${userSubTab === 'list' ? 'active' : ''}`} onClick={() => setUserSubTab('list')}>
-                  Usuarios
-                </button>
-                <button className={`subtab-btn ${userSubTab === 'roles' ? 'active' : ''}`} onClick={() => setUserSubTab('roles')}>
-                  Roles y Permisos
-                </button>
-              </div>
-
-              {userSubTab === 'list' ? (
-                <section className="inspections-table-card">
-                  <div className="table-card-header">
-                    <h2>Listado de Usuarios</h2>
-                    <div className="table-header-actions">
-                      <button className="btn-new-inspection-dark" onClick={handleOpenCreateModal}>
-                        <IconPlus /> Nuevo Usuario
-                      </button>
-                    </div>
+              <section className="inspections-table-card">
+                <div className="table-card-header">
+                  <h2>Gestión de Usuarios</h2>
+                  <div className="table-header-actions">
+                    <button className="btn-new-inspection-dark" onClick={handleOpenCreateModal}>
+                      <IconPlus /> Nuevo Usuario
+                    </button>
                   </div>
+                </div>
 
-                  <div className="table-responsive-container">
-                    <table className="inspections-table">
-                      <thead>
-                        <tr>
-                          <th>NOMBRE COMPLETO</th>
-                          <th>USUARIO</th>
-                          <th>EMAIL</th>
-                          <th>ROLES</th>
-                          <th>ACCIONES</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {users.map((u) => (
-                          <tr key={u.id}>
-                            <td className="cell-operador" style={{ fontWeight: 600 }}>{u.fullName}</td>
-                            <td className="cell-fecha">{u.username}</td>
-                            <td>{u.email}</td>
-                            <td>
-                              {u.roles && u.roles.map((r, idx) => (
-                                <span key={idx} className="user-badge-role">{r}</span>
-                              ))}
-                            </td>
-                            <td className="cell-acciones">
-                              <button className="btn-action-edit" title="Editar" onClick={() => handleOpenEditModal(u)}>
-                                <IconPencil />
-                              </button>
+                <div className="table-responsive-container">
+                  <table className="inspections-table">
+                    <thead>
+                      <tr>
+                        <th>NOMBRE COMPLETO</th>
+                        <th>USUARIO</th>
+                        <th>EMAIL</th>
+                        <th>ROLES</th>
+                        <th>ACCIONES</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.map((u) => (
+                        <tr key={u.id}>
+                          <td className="cell-operador" style={{ fontWeight: 600 }}>{u.fullName}</td>
+                          <td className="cell-fecha">{u.username}</td>
+                          <td>{u.email}</td>
+                          <td>
+                            {u.roles && u.roles.map((r, idx) => (
+                              <span key={idx} className="user-badge-role">{r}</span>
+                            ))}
+                          </td>
+                          <td className="cell-acciones">
+                            <button className="btn-action-edit" title="Editar" onClick={() => handleOpenEditModal(u)}>
+                              <IconPencil />
+                            </button>
+                            {u.id !== 1 && (
                               <button className="btn-action-view" style={{ color: 'var(--status-inop-text)' }} title="Eliminar" onClick={() => handleDeleteUser(u.id)}>
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                               </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+          )}
+
+          {activeView === 'inspecciones' && (
+            <div className="active-inspections-view">
+              <section className="inspections-table-card">
+                <div className="table-card-header">
+                  <h2>Inspecciones Activas y Diligenciadas</h2>
+                  <p className="section-subtitle">Visualice las respuestas de los formularios de inspección en tiempo real.</p>
+                </div>
+
+                <div className="table-responsive-container">
+                  <table className="inspections-table">
+                    <thead>
+                      <tr>
+                        <th>FECHA</th>
+                        <th>PLACA</th>
+                        <th>OPERADOR</th>
+                        <th>OBSERVACIONES</th>
+                        <th>ESTADO</th>
+                        <th>ACCIONES</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {inspections.map((item) => (
+                        <tr key={item.id}>
+                          <td className="cell-fecha">{item.fecha}</td>
+                          <td className="cell-placa">{item.placa}</td>
+                          <td className="cell-operador">{item.operador}</td>
+                          <td className="cell-observaciones">{item.observaciones}</td>
+                          <td>
+                            <span className={`status-badge ${item.estado.toLowerCase()}`}>
+                              {item.estado}
+                            </span>
+                          </td>
+                          <td className="cell-acciones">
+                            <button className="btn-action-view" title="Ver Detalle / Gestionar" onClick={() => handleOpenSubmissionDetail(item.id)}>
+                              <IconEye /> Ver Respuestas
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+          )}
+
+          {activeView === 'flota' && hasPermission('VIEW_CREW') && (
+            <div className="fleet-crews-view">
+              <section className="inspections-table-card">
+                <div className="table-card-header">
+                  <h2>Cuadrillas</h2>
+                  <div className="table-header-actions">
+                    <button className="btn-new-inspection-dark" onClick={handleOpenCrewModal}>
+                      <IconPlus /> Nueva Cuadrilla
+                    </button>
+                  </div>
+                </div>
+
+                <div className="crews-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px', marginTop: '16px' }}>
+                  {crews.map(c => (
+                    <div key={c.id} className="kpi-card crew-card" style={{ gap: '10px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <h3 style={{ margin: 0, color: 'var(--admin-primary)', fontSize: '18px' }}>{c.name}</h3>
+                        <span className="status-badge operativo" style={{ fontSize: '10px' }}>{c.department || 'Operaciones'}</span>
+                      </div>
+                      <p style={{ fontSize: '13px', color: 'var(--admin-text-muted)', margin: '4px 0' }}>{c.description || 'Sin descripción'}</p>
+                      
+                      <div style={{ fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '4px', borderTop: '1px solid #eee', paddingTop: '10px', marginTop: '5px' }}>
+                        <div><strong>Ubicación:</strong> {c.location || 'General'}</div>
+                        <div><strong>Líder asignado:</strong> {c.managedByUserName || 'No asignado'}</div>
+                        <div><strong>Miembros activos:</strong> {c.memberCount || 0}</div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                        <button className="btn-modal-cancel" style={{ padding: '6px 12px', fontSize: '12px', flex: 1 }} onClick={() => handleOpenMembersModal(c)}>
+                          Miembros
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {crews.length === 0 && (
+                    <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '40px', color: 'var(--admin-text-muted)', fontStyle: 'italic' }}>
+                      No se han registrado cuadrillas en el sistema.
+                    </div>
+                  )}
+                </div>
+              </section>
+            </div>
+          )}
+
+          {activeView === 'bitacora' && (
+            <div className="maintenance-log-view">
+              <section className="inspections-table-card">
+                <div className="table-card-header">
+                  <h2>Bitácora de Vehículos Inoperativos / Mantenimiento</h2>
+                  <p className="section-subtitle">Visualice y gestione los vehículos con fallas críticas reportadas.</p>
+                </div>
+
+                <div className="table-responsive-container">
+                  <table className="inspections-table">
+                    <thead>
+                      <tr>
+                        <th>FECHA REPORTE</th>
+                        <th>PLACA</th>
+                        <th>OPERADOR</th>
+                        <th>FALLA DETECTADA</th>
+                        <th>ESTADO</th>
+                        <th>ACCIONES</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {inspections.filter(i => i.estado === 'INOPERATIVO').map((item) => (
+                        <tr key={item.id}>
+                          <td className="cell-fecha">{item.fecha}</td>
+                          <td className="cell-placa">{item.placa}</td>
+                          <td className="cell-operador">{item.operador}</td>
+                          <td className="cell-observaciones" style={{ color: 'var(--status-inop-text)', fontWeight: 500 }}>
+                            {item.observaciones}
+                          </td>
+                          <td>
+                            <span className="status-badge inoperativo">INOPERATIVO</span>
+                          </td>
+                          <td className="cell-acciones">
+                            <button className="btn-new-inspection-dark" style={{ backgroundColor: 'var(--status-op-text)', fontSize: '11px', height: '32px' }} onClick={() => handleOpenSubmissionDetail(item.id)}>
+                              Resolver Falla
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {inspections.filter(i => i.estado === 'INOPERATIVO').length === 0 && (
+                        <tr>
+                          <td colSpan="6" className="no-records-cell" style={{ color: 'var(--status-op-text)' }}>
+                            ✔ ¡Excelente! No hay vehículos reportados como inoperativos en este momento.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+          )}
+
+          {activeView === 'reportes' && (
+            <div className="reports-and-audit-view" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              {/* Stats & Mini Graph */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '24px' }}>
+                <section className="inspections-table-card" style={{ flex: 1 }}>
+                  <h2>Distribución de Estados</h2>
+                  <div style={{ display: 'flex', justifyContent: 'center', margin: '20px 0' }}>
+                    {/* SVG Pie Chart */}
+                    <svg width="160" height="160" viewBox="0 0 36 36" className="donut">
+                      <circle className="donut-hole" cx="18" cy="18" r="15.915" fill="#fff"></circle>
+                      <circle className="donut-ring" cx="18" cy="18" r="15.915" fill="transparent" stroke="#f3f6f9" strokeWidth="4"></circle>
+                      
+                      {/* Operativo circle segment */}
+                      <circle className="donut-segment" cx="18" cy="18" r="15.915" fill="transparent" stroke="var(--status-op-text)" strokeWidth="4.2" 
+                              strokeDasharray={`${(inspections.filter(i => i.estado === 'OPERATIVO').length / inspections.length) * 100} ${100 - (inspections.filter(i => i.estado === 'OPERATIVO').length / inspections.length) * 100}`} 
+                              strokeDashoffset="25"></circle>
+                    </svg>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>🟢 Operativos</span>
+                      <strong>{inspections.filter(i => i.estado === 'OPERATIVO').length}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>🟡 Programados</span>
+                      <strong>{inspections.filter(i => i.estado === 'PROGRAMADO').length}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>🔴 Inoperativos</span>
+                      <strong>{inspections.filter(i => i.estado === 'INOPERATIVO').length}</strong>
+                    </div>
                   </div>
                 </section>
-              ) : (
+
+                <section className="inspections-table-card" style={{ flex: 2 }}>
+                  <h2>Historial de Auditoría de Sesión</h2>
+                  <p className="section-subtitle">Registro de eventos y acciones realizadas en el panel en la sesión actual.</p>
+                  
+                  <div className="audit-timeline" style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '16px', maxHeight: '250px', overflowY: 'auto' }}>
+                    {auditLogs.map(log => (
+                      <div key={log.id} style={{ display: 'flex', gap: '14px', borderLeft: '3px solid var(--admin-primary-light)', paddingLeft: '14px' }}>
+                        <div style={{ fontSize: '11px', color: 'var(--admin-text-muted)', minWidth: '110px' }}>{log.date}</div>
+                        <div>
+                          <strong style={{ fontSize: '12px', color: 'var(--admin-primary)' }}>[{log.action}] </strong>
+                          <span style={{ fontSize: '13px' }}>{log.detail}</span>
+                          <span style={{ fontSize: '11px', color: 'var(--admin-text-muted)', marginLeft: '10px' }}>({log.user})</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </div>
+            </div>
+          )}
+
+          {activeView === 'config' && hasPermission('MANAGE_ROLES') && (
+            <div className="config-view">
+              <section className="inspections-table-card">
+                <div className="table-card-header">
+                  <h2>Configuración de Seguridad - Matriz de Roles y Permisos</h2>
+                  <p className="section-subtitle">Asigne y modifique los permisos que posee cada rol en la plataforma.</p>
+                </div>
+
                 <div className="permissions-matrix-container">
                   <div className="role-selector-bar">
                     {roles.map((r) => (
@@ -808,15 +1465,15 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
                         <div className="category-permissions-list">
                           {perms.map((p) => {
                             const role = roles.find(r => r.id === selectedRoleId);
-                            const hasPermission = role?.permissions?.some(rp => rp.id === p.id) ?? false;
+                            const hasPerm = role?.permissions?.some(rp => rp.id === p.id) ?? false;
                             
                             return (
                               <div key={p.id} className="permission-item-row">
                                 <div className="permission-checkbox-col">
                                   <input 
                                     type="checkbox" 
-                                    checked={hasPermission}
-                                    onChange={() => handleTogglePermission(selectedRoleId, p.id, hasPermission)}
+                                    checked={hasPerm}
+                                    onChange={() => handleTogglePermission(selectedRoleId, p.id, hasPerm)}
                                   />
                                 </div>
                                 <div className="permission-text-col">
@@ -832,7 +1489,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
                     ))}
                   </div>
                 </div>
-              )}
+              </section>
             </div>
           )}
         </main>
@@ -915,6 +1572,230 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ===== CREW MODAL ===== */}
+      {showCrewModal && (
+        <div className="modal-backdrop">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h3>Crear Nueva Cuadrilla</h3>
+              <button className="modal-close-btn" onClick={() => setShowCrewModal(false)}>
+                <IconClose />
+              </button>
+            </div>
+            <form onSubmit={handleSaveCrew}>
+              <div className="modal-body">
+                <div className="modal-form-group">
+                  <label>Nombre de Cuadrilla *</label>
+                  <input 
+                    type="text" 
+                    required 
+                    value={crewFormData.name}
+                    onChange={(e) => setCrewFormData({ ...crewFormData, name: e.target.value })}
+                  />
+                </div>
+                <div className="modal-form-group">
+                  <label>Descripción</label>
+                  <input 
+                    type="text" 
+                    value={crewFormData.description}
+                    onChange={(e) => setCrewFormData({ ...crewFormData, description: e.target.value })}
+                  />
+                </div>
+                <div className="modal-form-group">
+                  <label>Departamento</label>
+                  <input 
+                    type="text" 
+                    value={crewFormData.department}
+                    onChange={(e) => setCrewFormData({ ...crewFormData, department: e.target.value })}
+                  />
+                </div>
+                <div className="modal-form-group">
+                  <label>Ubicación</label>
+                  <input 
+                    type="text" 
+                    value={crewFormData.location}
+                    onChange={(e) => setCrewFormData({ ...crewFormData, location: e.target.value })}
+                  />
+                </div>
+                <div className="modal-form-group">
+                  <label>Líder de Cuadrilla (Manager) *</label>
+                  <select 
+                    required 
+                    value={crewFormData.managedByUserId}
+                    onChange={(e) => setCrewFormData({ ...crewFormData, managedByUserId: e.target.value })}
+                  >
+                    {users.map(u => (
+                      <option key={u.id} value={u.id}>{u.fullName} ({u.username})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn-modal-cancel" onClick={() => setShowCrewModal(false)}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn-modal-submit">
+                  Crear
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ===== CREW MEMBERS MODAL ===== */}
+      {showMembersModal && selectedCrew && (
+        <div className="modal-backdrop">
+          <div className="modal-content" style={{ width: '600px' }}>
+            <div className="modal-header">
+              <h3>Miembros de {selectedCrew.name}</h3>
+              <button className="modal-close-btn" onClick={() => setShowMembersModal(false)}>
+                <IconClose />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div style={{ marginBottom: '15px' }}>
+                <h4>Agregar Nuevo Miembro</h4>
+                <div style={{ display: 'flex', gap: '10px', marginTop: '5px' }}>
+                  <select id="select-new-member" className="filter-field" style={{ flex: 1, height: '40px', border: '1px solid var(--admin-border)', borderRadius: '8px' }}>
+                    {users.filter(u => u.crewId !== selectedCrew.id).map(u => (
+                      <option key={u.id} value={u.id}>{u.fullName} ({u.username})</option>
+                    ))}
+                  </select>
+                  <button className="btn-new-inspection-dark" onClick={() => {
+                    const select = document.getElementById('select-new-member');
+                    if (select && select.value) {
+                      handleAddMemberToCrew(parseInt(select.value));
+                    }
+                  }}>
+                    Agregar
+                  </button>
+                </div>
+              </div>
+
+              <h4>Miembros Actuales</h4>
+              <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                {users.filter(u => u.crewId === selectedCrew.id || u.crewName === selectedCrew.name).map(m => (
+                  <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', borderBottom: '1px solid #eee' }}>
+                    <span>{m.fullName} ({m.username})</span>
+                    <button className="logout-btn" style={{ fontSize: '11px', padding: '2px 6px' }} onClick={() => handleRemoveMemberFromCrew(m.id)}>
+                      Eliminar
+                    </button>
+                  </div>
+                ))}
+                {users.filter(u => u.crewId === selectedCrew.id || u.crewName === selectedCrew.name).length === 0 && (
+                  <div style={{ color: 'var(--admin-text-muted)', fontStyle: 'italic', padding: '10px 0' }}>
+                    No hay miembros en esta cuadrilla.
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-modal-cancel" onClick={() => setShowMembersModal(false)}>
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== DETAILED SUBMISSION / RESPONSES MODAL ===== */}
+      {showSubmissionModal && selectedSubmission && (
+        <div className="modal-backdrop">
+          <div className="modal-content" style={{ width: '700px' }}>
+            <div className="modal-header">
+              <h3>Respuestas Detalladas de Inspección</h3>
+              <button className="modal-close-btn" onClick={() => setShowSubmissionModal(false)}>
+                <IconClose />
+              </button>
+            </div>
+            <div className="modal-body" style={{ maxHeight: '65vh' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px', marginBottom: '15px', fontSize: '13px' }}>
+                <div><strong>Placa:</strong> {selectedSubmission.placa}</div>
+                <div><strong>Operador:</strong> {selectedSubmission.operador}</div>
+                <div><strong>Fecha:</strong> {selectedSubmission.fecha}</div>
+                <div><strong>Estado Actual:</strong> <span className={`status-badge ${selectedSubmission.estado?.toLowerCase()}`}>{selectedSubmission.estado}</span></div>
+              </div>
+
+              <h4>Respuestas del Formulario:</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
+                {selectedSubmission.answers && selectedSubmission.answers.map((ans, idx) => (
+                  <div key={idx} style={{ padding: '10px', border: '1px solid var(--admin-border)', borderRadius: '6px' }}>
+                    <div style={{ fontWeight: 600, fontSize: '13px' }}>{ans.formFieldLabel}</div>
+                    <div style={{ fontSize: '14px', marginTop: '4px', color: 'var(--admin-primary)', fontWeight: 500 }}>{ans.fieldValue}</div>
+                    {ans.notes && <div style={{ fontSize: '12px', color: 'var(--admin-text-muted)', marginTop: '4px', fontStyle: 'italic' }}>Nota: {ans.notes}</div>}
+                  </div>
+                ))}
+                {(!selectedSubmission.answers || selectedSubmission.answers.length === 0) && (
+                  <div style={{ color: 'var(--admin-text-muted)', fontStyle: 'italic' }}>
+                    Sin respuestas estructuradas (Registro semilla / Datos de prueba).
+                  </div>
+                )}
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--admin-border)', marginTop: '20px', paddingTop: '15px' }}>
+                {/* Rectification / Verification by Crew (Cuadrilla) Section */}
+                {hasPermission('VERIFY_FORM') && (
+                  <div style={{ marginBottom: '15px', backgroundColor: '#fff8e1', padding: '15px', borderRadius: '8px' }}>
+                    <h4 style={{ margin: '0 0 10px 0', color: 'var(--status-prog-text)' }}>Verificación por Cuadrilla</h4>
+                    <div className="modal-form-group">
+                      <label>Observaciones del Rectificador</label>
+                      <textarea 
+                        className="form-input" 
+                        style={{ width: '100%', minHeight: '60px', padding: '8px', border: '1px solid #ccc', borderRadius: '6px', fontFamily: 'inherit', fontSize: '13px' }}
+                        value={rectifierObservations} 
+                        onChange={(e) => setRectifierObservations(e.target.value)}
+                      />
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', fontSize: '13px' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={requiresReview} 
+                        onChange={(e) => setRequiresReview(e.target.checked)}
+                      />
+                      Requiere revisión adicional por ingeniería
+                    </label>
+                    <button className="btn-new-inspection-dark" style={{ marginTop: '12px', width: '100%', backgroundColor: 'var(--status-prog-text)' }} onClick={handleVerifySubmission}>
+                      Verificar Inspección
+                    </button>
+                  </div>
+                )}
+
+                {/* Status Update Section */}
+                {hasPermission('EDIT_USER') && (
+                  <div>
+                    <h4>Cambiar Estado de la Inspección (Administración)</h4>
+                    <div className="modal-form-group" style={{ marginTop: '10px' }}>
+                      <label>Comentarios / Justificación</label>
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        value={submissionComments} 
+                        onChange={(e) => setSubmissionComments(e.target.value)}
+                        placeholder="Ej. Cambio de repuesto completado"
+                      />
+                    </div>
+                    <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                      <button className="btn-new-inspection-dark" style={{ backgroundColor: 'var(--status-op-text)', flex: 1 }} onClick={() => handleUpdateStatus('Approved')}>
+                        Marcar OPERATIVO (Aprobar)
+                      </button>
+                      <button className="btn-new-inspection-dark" style={{ backgroundColor: 'var(--status-inop-text)', flex: 1 }} onClick={() => handleUpdateStatus('Rejected')}>
+                        Marcar INOPERATIVO
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-modal-cancel" onClick={() => setShowSubmissionModal(false)}>
+                Cerrar
+              </button>
+            </div>
           </div>
         </div>
       )}
