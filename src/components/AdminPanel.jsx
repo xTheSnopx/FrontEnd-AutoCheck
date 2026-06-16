@@ -74,6 +74,30 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
   const [filterPlaca, setFilterPlaca] = useState('');
   const [filterEstado, setFilterEstado] = useState('Todos los estados');
   
+  // Navigation states
+  const [activeView, setActiveView] = useState('panel'); // 'panel' | 'users'
+  const [userSubTab, setUserSubTab] = useState('list'); // 'list' | 'roles'
+  
+  // User / Role / Permission lists
+  const [users, setUsers] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [permissions, setPermissions] = useState([]);
+  
+  // User Modal states
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [modalMode, setModalMode] = useState('create'); // 'create' | 'edit'
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [userFormData, setUserFormData] = useState({
+    username: '',
+    email: '',
+    fullName: '',
+    password: '',
+    roleId: ''
+  });
+  
+  // Matrix Role selection
+  const [selectedRoleId, setSelectedRoleId] = useState(1);
+
   // High quality seeded/mock data to match user screenshot
   const [inspections, setInspections] = useState([
     { id: 1, fecha: '2023-11-20 08:30', placa: 'FLT-8821', operador: 'Carlos Mendoza', observaciones: 'Presión de neumáticos revisada...', estado: 'OPERATIVO' },
@@ -84,6 +108,54 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
   ]);
 
   const [filteredInspections, setFilteredInspections] = useState(inspections);
+
+  const fetchUsers = async () => {
+    try {
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+      if (!token) return;
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/Users`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUsers(data || []);
+      }
+    } catch (err) {
+      console.error('Error fetching users:', err);
+    }
+  };
+
+  const fetchRoles = async () => {
+    try {
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+      if (!token) return;
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/Roles`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRoles(data || []);
+      }
+    } catch (err) {
+      console.error('Error fetching roles:', err);
+    }
+  };
+
+  const fetchPermissions = async () => {
+    try {
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+      if (!token) return;
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/Roles/permissions`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPermissions(data || []);
+      }
+    } catch (err) {
+      console.error('Error fetching permissions:', err);
+    }
+  };
 
   // Fetch data from actual API if available
   useEffect(() => {
@@ -150,7 +222,10 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
     };
 
     fetchSubmissions();
-  }, []);
+    fetchUsers();
+    fetchRoles();
+    fetchPermissions();
+  }, [activeView]);
 
   // Filter effect
   useEffect(() => {
@@ -230,6 +305,164 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
     link.click();
     link.remove();
   };
+  
+  const handleOpenCreateModal = () => {
+    setModalMode('create');
+    setSelectedUser(null);
+    setUserFormData({
+      username: '',
+      email: '',
+      fullName: '',
+      password: '',
+      roleId: '3' // Default to INGENIERO_MECANICO (role 3)
+    });
+    setShowUserModal(true);
+  };
+
+  const handleOpenEditModal = (user) => {
+    setModalMode('edit');
+    setSelectedUser(user);
+    // Find current role id
+    let userRoleId = '3';
+    if (user.roles && user.roles.length > 0) {
+      const currentRole = roles.find(r => r.name === user.roles[0]);
+      if (currentRole) userRoleId = currentRole.id.toString();
+    }
+    setUserFormData({
+      username: user.username,
+      email: user.email,
+      fullName: user.fullName,
+      password: '', // Empty password for edit
+      roleId: userRoleId
+    });
+    setShowUserModal(true);
+  };
+
+  const handleSaveUser = async (e) => {
+    e.preventDefault();
+    try {
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+      if (!token) return;
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      
+      if (modalMode === 'create') {
+        const createRes = await fetch(`${apiUrl}/Users`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            username: userFormData.username,
+            email: userFormData.email,
+            fullName: userFormData.fullName,
+            password: userFormData.password
+          })
+        });
+        
+        if (createRes.ok) {
+          const newUser = await createRes.json();
+          if (userFormData.roleId) {
+            await fetch(`${apiUrl}/Users/${newUser.id}/roles/${userFormData.roleId}`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+          }
+          alert('Usuario creado exitosamente');
+          setShowUserModal(false);
+          fetchUsers();
+        } else {
+          const errData = await createRes.json();
+          alert(`Error: ${errData.message || 'No se pudo crear el usuario'}`);
+        }
+      } else {
+        const editRes = await fetch(`${apiUrl}/Users/${selectedUser.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            username: userFormData.username,
+            email: userFormData.email,
+            fullName: userFormData.fullName,
+            isActive: true
+          })
+        });
+        
+        if (editRes.ok) {
+          if (userFormData.roleId) {
+            if (selectedUser.roles && selectedUser.roles.length > 0) {
+              for (const oldRoleName of selectedUser.roles) {
+                const matchedRole = roles.find(r => r.name === oldRoleName);
+                if (matchedRole && matchedRole.id !== parseInt(userFormData.roleId)) {
+                  await fetch(`${apiUrl}/Users/${selectedUser.id}/roles/${matchedRole.id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                  });
+                }
+              }
+            }
+            await fetch(`${apiUrl}/Users/${selectedUser.id}/roles/${userFormData.roleId}`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+          }
+          alert('Usuario actualizado exitosamente');
+          setShowUserModal(false);
+          fetchUsers();
+        } else {
+          const errData = await editRes.json();
+          alert(`Error: ${errData.message || 'No se pudo actualizar el usuario'}`);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Ocurrió un error inesperado');
+    }
+  };
+
+  const handleDeleteUser = async (userId) => {
+    if (!window.confirm('¿Está seguro de eliminar este usuario?')) return;
+    try {
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+      if (!token) return;
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/Users/${userId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        alert('Usuario eliminado exitosamente');
+        fetchUsers();
+      } else {
+        alert('No se pudo eliminar el usuario');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleTogglePermission = async (roleId, permissionId, hasPermission) => {
+    try {
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+      if (!token) return;
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      
+      const method = hasPermission ? 'DELETE' : 'POST';
+      const res = await fetch(`${apiUrl}/Roles/${roleId}/permissions/${permissionId}`, {
+        method: method,
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (res.ok) {
+        fetchRoles();
+      } else {
+        alert('No tiene permisos (DEV únicamente) para modificar los permisos de este rol o el endpoint falló.');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   return (
     <div className="admin-dashboard-layout">
@@ -244,9 +477,13 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
         </div>
 
         <nav className="sidebar-menu">
-          <a href="#panel" className="menu-item active">
+          <a href="#panel" className={`menu-item ${activeView === 'panel' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveView('panel'); }}>
             <IconDashboard />
             <span>Panel</span>
+          </a>
+          <a href="#usuarios" className={`menu-item ${activeView === 'users' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveView('users'); }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '2px' }}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <span>Gestión de Usuarios</span>
           </a>
           <a href="#inspecciones" className="menu-item" onClick={(e) => { e.preventDefault(); alert('Módulo Inspecciones Activas próximamente'); }}>
             <IconActiveInspections />
@@ -329,167 +566,358 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
 
         {/* ===== DASHBOARD BODY ===== */}
         <main className="admin-content-body">
-          
-          {/* ===== KPI METRIC CARDS ===== */}
-          <section className="kpi-grid">
-            <div className="kpi-card">
-              <span className="kpi-label">FLOTA ACTIVA</span>
-              <div className="kpi-value-row">
-                <span className="kpi-number">124</span>
-                <span className="kpi-trend positive">↑ 4%</span>
-              </div>
-            </div>
-
-            <div className="kpi-card">
-              <span className="kpi-label">INSPECCIONES HOY</span>
-              <div className="kpi-value-row">
-                <span className="kpi-number">42 <span className="kpi-sub">/ 50 metas</span></span>
-              </div>
-            </div>
-
-            <div className="kpi-card">
-              <span className="kpi-label">EN MANTENIMIENTO</span>
-              <div className="kpi-value-row">
-                <span className="kpi-number">08</span>
-                <span className="kpi-badge-alert">ALERTA</span>
-              </div>
-            </div>
-
-            <div className="kpi-card">
-              <span className="kpi-label">DISPONIBILIDAD</span>
-              <div className="kpi-value-row flex-column">
-                <span className="kpi-number">92%</span>
-                <div className="kpi-progress-container">
-                  <div className="kpi-progress-bar" style={{ width: '92%' }}></div>
+          {activeView === 'panel' ? (
+            <>
+              {/* ===== KPI METRIC CARDS ===== */}
+              <section className="kpi-grid">
+                <div className="kpi-card">
+                  <span className="kpi-label">FLOTA ACTIVA</span>
+                  <div className="kpi-value-row">
+                    <span className="kpi-number">124</span>
+                    <span className="kpi-trend positive">↑ 4%</span>
+                  </div>
                 </div>
-              </div>
-            </div>
-          </section>
 
-          {/* ===== FILTER MODULE ===== */}
-          <section className="filter-card">
-            <h2 className="filter-title">
-              <IconGear /> Filtros de Inspección
-            </h2>
-            <div className="filter-inputs-grid">
-              <div className="filter-field">
-                <label>RANGO DE FECHAS</label>
-                <input 
-                  type="date" 
-                  value={filterDate}
-                  onChange={(e) => setFilterDate(e.target.value)}
-                />
-              </div>
-
-              <div className="filter-field">
-                <label>PLACA VEHÍCULO</label>
-                <div className="input-with-icon">
-                  <span className="field-icon"><IconTruck /></span>
-                  <input 
-                    type="text" 
-                    placeholder="EJ. ABC-124" 
-                    value={filterPlaca}
-                    onChange={(e) => setFilterPlaca(e.target.value)}
-                  />
+                <div className="kpi-card">
+                  <span className="kpi-label">INSPECCIONES HOY</span>
+                  <div className="kpi-value-row">
+                    <span className="kpi-number">42 <span className="kpi-sub">/ 50 metas</span></span>
+                  </div>
                 </div>
-              </div>
 
-              <div className="filter-field">
-                <label>ESTADO</label>
-                <select 
-                  value={filterEstado}
-                  onChange={(e) => setFilterEstado(e.target.value)}
-                >
-                  <option>Todos los estados</option>
-                  <option>Operativo</option>
-                  <option>Programado</option>
-                  <option>Inoperativo</option>
-                </select>
-              </div>
+                <div className="kpi-card">
+                  <span className="kpi-label">EN MANTENIMIENTO</span>
+                  <div className="kpi-value-row">
+                    <span className="kpi-number">08</span>
+                    <span className="kpi-badge-alert">ALERTA</span>
+                  </div>
+                </div>
 
-              <div className="filter-actions-row">
-                <button className="btn-execute-query" onClick={() => {}}>Ejecutar Consulta</button>
-                <button className="btn-clear-filters" onClick={handleClearFilters}>Limpiar Filtros</button>
-              </div>
-            </div>
-          </section>
+                <div className="kpi-card">
+                  <span className="kpi-label">DISPONIBILIDAD</span>
+                  <div className="kpi-value-row flex-column">
+                    <span className="kpi-number">92%</span>
+                    <div className="kpi-progress-container">
+                      <div className="kpi-progress-bar" style={{ width: '92%' }}></div>
+                    </div>
+                  </div>
+                </div>
+              </section>
 
-          {/* ===== INSPECTIONS TABLE CARD ===== */}
-          <section className="inspections-table-card">
-            <div className="table-card-header">
-              <h2>Inspecciones Recientes</h2>
-              <div className="table-header-actions">
-                <button className="btn-export-csv" onClick={handleExportCSV}>
-                  <IconDownload /> Exportar CSV
+              {/* ===== FILTER MODULE ===== */}
+              <section className="filter-card">
+                <h2 className="filter-title">
+                  <IconGear /> Filtros de Inspección
+                </h2>
+                <div className="filter-inputs-grid">
+                  <div className="filter-field">
+                    <label>RANGO DE FECHAS</label>
+                    <input 
+                      type="date" 
+                      value={filterDate}
+                      onChange={(e) => setFilterDate(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="filter-field">
+                    <label>PLACA VEHÍCULO</label>
+                    <div className="input-with-icon">
+                      <span className="field-icon"><IconTruck /></span>
+                      <input 
+                        type="text" 
+                        placeholder="EJ. ABC-124" 
+                        value={filterPlaca}
+                        onChange={(e) => setFilterPlaca(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="filter-field">
+                    <label>ESTADO</label>
+                    <select 
+                      value={filterEstado}
+                      onChange={(e) => setFilterEstado(e.target.value)}
+                    >
+                      <option>Todos los estados</option>
+                      <option>Operativo</option>
+                      <option>Programado</option>
+                      <option>Inoperativo</option>
+                    </select>
+                  </div>
+
+                  <div className="filter-actions-row">
+                    <button className="btn-execute-query" onClick={() => {}}>Ejecutar Consulta</button>
+                    <button className="btn-clear-filters" onClick={handleClearFilters}>Limpiar Filtros</button>
+                  </div>
+                </div>
+              </section>
+
+              {/* ===== INSPECTIONS TABLE CARD ===== */}
+              <section className="inspections-table-card">
+                <div className="table-card-header">
+                  <h2>Inspecciones Recientes</h2>
+                  <div className="table-header-actions">
+                    <button className="btn-export-csv" onClick={handleExportCSV}>
+                      <IconDownload /> Exportar CSV
+                    </button>
+                    <button className="btn-new-inspection-dark" onClick={onNewInspection}>
+                      <IconPlus /> Nueva Inspección
+                    </button>
+                  </div>
+                </div>
+
+                <div className="table-responsive-container">
+                  <table className="inspections-table">
+                    <thead>
+                      <tr>
+                        <th>FECHA</th>
+                        <th>PLACA</th>
+                        <th>OPERADOR</th>
+                        <th>OBSERVACIONES</th>
+                        <th>ESTADO</th>
+                        <th>ACCIONES</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredInspections.map((item) => (
+                        <tr key={item.id}>
+                          <td className="cell-fecha">{item.fecha}</td>
+                          <td className="cell-placa">{item.placa}</td>
+                          <td className="cell-operador">{item.operador}</td>
+                          <td className="cell-observaciones">{item.observaciones}</td>
+                          <td>
+                            <span className={`status-badge ${item.estado.toLowerCase()}`}>
+                              {item.estado}
+                            </span>
+                          </td>
+                          <td className="cell-acciones">
+                            <button className="btn-action-view" title="Ver detalle" onClick={() => alert(`Detalle de inspección para placa: ${item.placa}`)}>
+                              <IconEye />
+                            </button>
+                            <button className="btn-action-edit" title="Editar" onClick={() => alert(`Editar inspección para placa: ${item.placa}`)}>
+                              <IconPencil />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {filteredInspections.length === 0 && (
+                        <tr>
+                          <td colSpan="6" className="no-records-cell">
+                            No se encontraron inspecciones con los filtros seleccionados.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination */}
+                <div className="table-footer-pagination">
+                  <span className="pagination-info">
+                    Mostrando 1 - {filteredInspections.length} de {filteredInspections.length} registros
+                  </span>
+                  <div className="pagination-buttons">
+                    <button className="page-btn disabled" disabled>&lt;</button>
+                    <button className="page-btn active">1</button>
+                    <button className="page-btn">2</button>
+                    <button className="page-btn">3</button>
+                    <button className="page-btn">&gt;</button>
+                  </div>
+                </div>
+              </section>
+            </>
+          ) : (
+            <div className="users-management-view">
+              <div className="admin-subtabs-row">
+                <button className={`subtab-btn ${userSubTab === 'list' ? 'active' : ''}`} onClick={() => setUserSubTab('list')}>
+                  Usuarios
                 </button>
-                <button className="btn-new-inspection-dark" onClick={onNewInspection}>
-                  <IconPlus /> Nueva Inspección
+                <button className={`subtab-btn ${userSubTab === 'roles' ? 'active' : ''}`} onClick={() => setUserSubTab('roles')}>
+                  Roles y Permisos
                 </button>
               </div>
-            </div>
 
-            <div className="table-responsive-container">
-              <table className="inspections-table">
-                <thead>
-                  <tr>
-                    <th>FECHA</th>
-                    <th>PLACA</th>
-                    <th>OPERADOR</th>
-                    <th>OBSERVACIONES</th>
-                    <th>ESTADO</th>
-                    <th>ACCIONES</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredInspections.map((item) => (
-                    <tr key={item.id}>
-                      <td className="cell-fecha">{item.fecha}</td>
-                      <td className="cell-placa">{item.placa}</td>
-                      <td className="cell-operador">{item.operador}</td>
-                      <td className="cell-observaciones">{item.observaciones}</td>
-                      <td>
-                        <span className={`status-badge ${item.estado.toLowerCase()}`}>
-                          {item.estado}
-                        </span>
-                      </td>
-                      <td className="cell-acciones">
-                        <button className="btn-action-view" title="Ver detalle" onClick={() => alert(`Detalle de inspección para placa: ${item.placa}`)}>
-                          <IconEye />
-                        </button>
-                        <button className="btn-action-edit" title="Editar" onClick={() => alert(`Editar inspección para placa: ${item.placa}`)}>
-                          <IconPencil />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredInspections.length === 0 && (
-                    <tr>
-                      <td colSpan="6" className="no-records-cell">
-                        No se encontraron inspecciones con los filtros seleccionados.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+              {userSubTab === 'list' ? (
+                <section className="inspections-table-card">
+                  <div className="table-card-header">
+                    <h2>Listado de Usuarios</h2>
+                    <div className="table-header-actions">
+                      <button className="btn-new-inspection-dark" onClick={handleOpenCreateModal}>
+                        <IconPlus /> Nuevo Usuario
+                      </button>
+                    </div>
+                  </div>
 
-            {/* Pagination */}
-            <div className="table-footer-pagination">
-              <span className="pagination-info">
-                Mostrando 1 - {filteredInspections.length} de {filteredInspections.length} registros
-              </span>
-              <div className="pagination-buttons">
-                <button className="page-btn disabled" disabled>&lt;</button>
-                <button className="page-btn active">1</button>
-                <button className="page-btn">2</button>
-                <button className="page-btn">3</button>
-                <button className="page-btn">&gt;</button>
-              </div>
-            </div>
-          </section>
+                  <div className="table-responsive-container">
+                    <table className="inspections-table">
+                      <thead>
+                        <tr>
+                          <th>NOMBRE COMPLETO</th>
+                          <th>USUARIO</th>
+                          <th>EMAIL</th>
+                          <th>ROLES</th>
+                          <th>ACCIONES</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {users.map((u) => (
+                          <tr key={u.id}>
+                            <td className="cell-operador" style={{ fontWeight: 600 }}>{u.fullName}</td>
+                            <td className="cell-fecha">{u.username}</td>
+                            <td>{u.email}</td>
+                            <td>
+                              {u.roles && u.roles.map((r, idx) => (
+                                <span key={idx} className="user-badge-role">{r}</span>
+                              ))}
+                            </td>
+                            <td className="cell-acciones">
+                              <button className="btn-action-edit" title="Editar" onClick={() => handleOpenEditModal(u)}>
+                                <IconPencil />
+                              </button>
+                              <button className="btn-action-view" style={{ color: 'var(--status-inop-text)' }} title="Eliminar" onClick={() => handleDeleteUser(u.id)}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              ) : (
+                <div className="permissions-matrix-container">
+                  <div className="role-selector-bar">
+                    {roles.map((r) => (
+                      <button key={r.id} className={`role-select-btn ${selectedRoleId === r.id ? 'active' : ''}`} onClick={() => setSelectedRoleId(r.id)}>
+                        {r.name}
+                      </button>
+                    ))}
+                  </div>
 
+                  <div className="permissions-grid">
+                    {Object.entries(
+                      permissions.reduce((acc, p) => {
+                        const cat = p.category || 'Otros';
+                        if (!acc[cat]) acc[cat] = [];
+                        acc[cat].push(p);
+                        return acc;
+                      }, {})
+                    ).map(([category, perms]) => (
+                      <div key={category} className="permission-category-card">
+                        <div className="category-card-header">{category}</div>
+                        <div className="category-permissions-list">
+                          {perms.map((p) => {
+                            const role = roles.find(r => r.id === selectedRoleId);
+                            const hasPermission = role?.permissions?.some(rp => rp.id === p.id) ?? false;
+                            
+                            return (
+                              <div key={p.id} className="permission-item-row">
+                                <div className="permission-checkbox-col">
+                                  <input 
+                                    type="checkbox" 
+                                    checked={hasPermission}
+                                    onChange={() => handleTogglePermission(selectedRoleId, p.id, hasPermission)}
+                                  />
+                                </div>
+                                <div className="permission-text-col">
+                                  <span className="permission-name-lbl">{p.name}</span>
+                                  <span className="permission-desc-lbl">{p.description}</span>
+                                  {p.isCritical && <span className="permission-critical-badge">CRÍTICO</span>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </main>
       </div>
+
+      {/* ===== USER MODAL ===== */}
+      {showUserModal && (
+        <div className="modal-backdrop">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h3>{modalMode === 'create' ? 'Crear Nuevo Usuario' : 'Editar Usuario'}</h3>
+              <button className="modal-close-btn" onClick={() => setShowUserModal(false)}>
+                <IconClose />
+              </button>
+            </div>
+            <form onSubmit={handleSaveUser}>
+              <div className="modal-body">
+                <div className="modal-form-group">
+                  <label htmlFor="modal-fullName">Nombre Completo *</label>
+                  <input 
+                    type="text" 
+                    id="modal-fullName" 
+                    required 
+                    value={userFormData.fullName}
+                    onChange={(e) => setUserFormData({ ...userFormData, fullName: e.target.value })}
+                  />
+                </div>
+                <div className="modal-form-group">
+                  <label htmlFor="modal-username">Usuario *</label>
+                  <input 
+                    type="text" 
+                    id="modal-username" 
+                    required 
+                    value={userFormData.username}
+                    onChange={(e) => setUserFormData({ ...userFormData, username: e.target.value })}
+                  />
+                </div>
+                <div className="modal-form-group">
+                  <label htmlFor="modal-email">Email *</label>
+                  <input 
+                    type="email" 
+                    id="modal-email" 
+                    required 
+                    value={userFormData.email}
+                    onChange={(e) => setUserFormData({ ...userFormData, email: e.target.value })}
+                  />
+                </div>
+                {modalMode === 'create' && (
+                  <div className="modal-form-group">
+                    <label htmlFor="modal-password">Contraseña *</label>
+                    <input 
+                      type="password" 
+                      id="modal-password" 
+                      required 
+                      value={userFormData.password}
+                      onChange={(e) => setUserFormData({ ...userFormData, password: e.target.value })}
+                    />
+                  </div>
+                )}
+                <div className="modal-form-group">
+                  <label htmlFor="modal-role">Rol Principal *</label>
+                  <select 
+                    id="modal-role" 
+                    required 
+                    value={userFormData.roleId}
+                    onChange={(e) => setUserFormData({ ...userFormData, roleId: e.target.value })}
+                  >
+                    {roles.map((r) => (
+                      <option key={r.id} value={r.id.toString()}>{r.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn-modal-cancel" onClick={() => setShowUserModal(false)}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn-modal-submit">
+                  Guardar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
