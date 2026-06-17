@@ -678,9 +678,11 @@
 
 .no-records-cell {
   text-align: center;
-  padding: 40px 0 !important;
+  padding: 40px 20px !important;
   color: var(--admin-text-muted);
   font-style: italic;
+  white-space: normal;
+  word-break: break-word;
 }
 
 /* Pagination */
@@ -1177,5 +1179,34 @@
   border-radius: 4px;
   align-self: flex-start;
   margin-top: 4px;
+}
+
+/* ===== NOTIFICATIONS DROPDOWN ===== */
+.notifications-dropdown {
+  position: absolute;
+  right: 0;
+  top: 45px;
+  width: 320px;
+  background-color: var(--admin-white);
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  max-height: 400px;
+  font-family: inherit;
+}
+
+@media (max-width: 480px) {
+  .notifications-dropdown {
+    position: fixed !important;
+    top: 65px !important;
+    right: 16px !important;
+    left: 16px !important;
+    width: auto !important;
+    max-width: calc(100vw - 32px) !important;
+    max-height: 380px !important;
+  }
 }
 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useToast } from '../contexts/ToastContext';
+import { PERMISSION_MAP, CATEGORY_MAP } from '../constants/permissions';
 import '../styles/AdminPanel.css';
 
 // ===== ICONS (Inline SVG to avoid dependency issues) =====
@@ -628,12 +629,17 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
 
   // Crews Actions
   const handleOpenCrewModal = () => {
+    const isJefeMtto = hasRole('JEFE_MTTO');
+    const eligibleUsers = isJefeMtto
+      ? users.filter(u => u.roles && u.roles.includes('CUADRILLA'))
+      : users;
+
     setCrewFormData({
       name: '',
       description: '',
       department: '',
       location: '',
-      managedByUserId: users[0]?.id || ''
+      managedByUserId: eligibleUsers[0]?.id || ''
     });
     setShowCrewModal(true);
   };
@@ -973,21 +979,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
               </button>
 
               {notificationsOpen && (
-                <div className="notifications-dropdown" style={{
-                  position: 'absolute',
-                  right: 0,
-                  top: '45px',
-                  width: '320px',
-                  backgroundColor: 'var(--admin-white)',
-                  border: '1px solid var(--admin-border)',
-                  borderRadius: '12px',
-                  boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)',
-                  zIndex: 300,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  maxHeight: '400px',
-                  fontFamily: 'inherit'
-                }}>
+                <div className="notifications-dropdown">
                   <div className="dropdown-header" style={{
                     padding: '12px 16px',
                     borderBottom: '1px solid var(--admin-border)',
@@ -1536,7 +1528,8 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
                   <div className="permissions-grid">
                     {Object.entries(
                       permissions.reduce((acc, p) => {
-                        const cat = p.category || 'Otros';
+                        const rawCat = p.category || 'Otros';
+                        const cat = CATEGORY_MAP[rawCat] || rawCat;
                         if (!acc[cat]) acc[cat] = [];
                         acc[cat].push(p);
                         return acc;
@@ -1548,6 +1541,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
                           {perms.map((p) => {
                             const role = roles.find(r => r.id === selectedRoleId);
                             const hasPerm = role?.permissions?.some(rp => rp.id === p.id) ?? false;
+                            const mapped = PERMISSION_MAP[p.name] || { name: p.name, desc: p.description };
                             
                             return (
                               <div key={p.id} className="permission-item-row">
@@ -1559,8 +1553,8 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
                                   />
                                 </div>
                                 <div className="permission-text-col">
-                                  <span className="permission-name-lbl">{p.name}</span>
-                                  <span className="permission-desc-lbl">{p.description}</span>
+                                  <span className="permission-name-lbl">{mapped.name}</span>
+                                  <span className="permission-desc-lbl">{mapped.desc}</span>
                                   {p.isCritical && <span className="permission-critical-badge">CRÍTICO</span>}
                                 </div>
                               </div>
@@ -1710,7 +1704,10 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
                     value={crewFormData.managedByUserId}
                     onChange={(e) => setCrewFormData({ ...crewFormData, managedByUserId: e.target.value })}
                   >
-                    {users.map(u => (
+                    {(hasRole('JEFE_MTTO')
+                      ? users.filter(u => u.roles && u.roles.includes('CUADRILLA'))
+                      : users
+                    ).map(u => (
                       <option key={u.id} value={u.id}>{u.fullName} ({u.username})</option>
                     ))}
                   </select>
@@ -1744,7 +1741,10 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
                 <h4>Agregar Nuevo Miembro</h4>
                 <div style={{ display: 'flex', gap: '10px', marginTop: '5px' }}>
                   <select id="select-new-member" className="filter-field" style={{ flex: 1, height: '40px', border: '1px solid var(--admin-border)', borderRadius: '8px' }}>
-                    {users.filter(u => u.crewId !== selectedCrew.id).map(u => (
+                    {(hasRole('JEFE_MTTO')
+                      ? users.filter(u => u.roles && u.roles.includes('CUADRILLA'))
+                      : users
+                    ).filter(u => u.crewId !== selectedCrew.id).map(u => (
                       <option key={u.id} value={u.id}>{u.fullName} ({u.username})</option>
                     ))}
                   </select>

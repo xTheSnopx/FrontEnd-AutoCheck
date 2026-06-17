@@ -23,6 +23,17 @@ const FormComponent = ({ onSubmit }) => {
   const isCuadrilla = userRoles.includes('CUADRILLA');
   const isReadOnly = isCuadrilla;
 
+  // Helper para obtener las iniciales del nombre
+  const getInitials = (name) => {
+    if (!name) return 'U';
+    const clean = name.replace(/[^a-zA-Z0-9 ]/g, '').trim();
+    const parts = clean.split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return clean.slice(0, 2).toUpperCase();
+  };
+
   // Estado para los campos del formulario
   // Mapeamos los campos a IDs (1 a 27) que coinciden con las semillas de la base de datos
   const [answers, setAnswers] = useState({
@@ -69,6 +80,7 @@ const FormComponent = ({ onSubmit }) => {
   const [photo, setPhoto] = useState(null);
   const [activeSection, setActiveSection] = useState('doc');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Referencias para las secciones de scroll
   const sectionRefs = {
@@ -193,6 +205,11 @@ const FormComponent = ({ onSubmit }) => {
       return;
     }
 
+    if (answers[28].replace(/\s/g, '').length !== 6) {
+      showToast('La placa del vehículo debe tener exactamente 6 caracteres alfanuméricos (ej. MHX882).', 'warning');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -241,22 +258,102 @@ const FormComponent = ({ onSubmit }) => {
     <div className="form-component-mobile">
       {/* ===== MOBILE HEADER ===== */}
       <header className="form-mobile-header" style={isHsq ? { background: '#d35400' } : isCuadrilla ? { background: '#2c3e50' } : {}}>
-        <button type="button" className="menu-btn">
-          <svg className="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-          <span className="menu-text">menu</span>
+        <button type="button" className="menu-btn" onClick={() => setSidebarOpen(true)}>
+          <svg className="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          <span className="menu-text">menú</span>
         </button>
         <h1 className="header-brand">AutoCheckAML</h1>
         <div className="header-right" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: '1.2' }}>
-            <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#fff' }}>{userFullName}</span>
-            <span style={{ fontSize: '9px', color: '#dfe6e9' }}>{userRoles.join(', ')}</span>
+          <div className="user-details-block" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: '1.2' }}>
+            <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#fff' }}>{userFullName}</span>
+            <span style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.75)' }}>{userRoles.join(', ')}</span>
           </div>
           <div className="avatar-circle">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            {getInitials(userFullName)}
           </div>
-          <button type="button" className="logout-btn" onClick={() => { localStorage.clear(); sessionStorage.clear(); window.location.reload(); }}>logout</button>
         </div>
       </header>
+
+      {/* ===== MOBILE SIDEBAR DRAWER ===== */}
+      <aside className={`form-sidebar ${sidebarOpen ? 'open' : ''}`} style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '280px',
+        height: '100vh',
+        backgroundColor: '#0F172A',
+        color: '#fff',
+        zIndex: 1000,
+        padding: '24px 20px',
+        display: 'flex',
+        flexDirection: 'column',
+        boxShadow: '4px 0 20px rgba(0,0,0,0.3)',
+        transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+        transition: 'transform 0.3s ease-in-out'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+          <h2 style={{ fontSize: '18px', margin: 0, fontWeight: 'bold', color: '#fff' }}>Menú</h2>
+          <button type="button" onClick={() => setSidebarOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '24px', color: '#fff', padding: '4px' }}>&times;</button>
+        </div>
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: '12px', flex: 1 }}>
+          <button
+            type="button"
+            onClick={() => {
+              setSidebarOpen(false);
+              if (onSubmit) {
+                onSubmit({ action: 'go_panel' });
+              }
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              textAlign: 'left',
+              fontSize: '14px',
+              padding: '12px',
+              color: '#cbd5e1',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              width: '100%',
+              transition: 'background 0.2s'
+            }}
+          >
+            📊 Volver al Panel
+          </button>
+        </nav>
+        <div style={{ marginTop: 'auto', borderTop: '1px solid #334155', paddingTop: '15px' }}>
+          <button
+            type="button"
+            onClick={() => {
+              localStorage.clear();
+              sessionStorage.clear();
+              window.location.reload();
+            }}
+            style={{
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.2)',
+              cursor: 'pointer',
+              textAlign: 'center',
+              fontSize: '14px',
+              padding: '12px',
+              color: '#ef4444',
+              borderRadius: '8px',
+              fontWeight: 'bold',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              width: '100%',
+              transition: 'all 0.2s'
+            }}
+          >
+            🚪 Cerrar Sesión
+          </button>
+        </div>
+      </aside>
+      {sidebarOpen && <div onClick={() => setSidebarOpen(false)} style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 999 }} />}
 
       {/* Cuadrilla Banner */}
       {isCuadrilla && (
@@ -338,7 +435,7 @@ const FormComponent = ({ onSubmit }) => {
             <span className="item-label" style={{ fontWeight: 'bold', color: 'var(--color-primary)' }}>Placa del Vehículo *</span>
             <input
               type="text"
-              placeholder="ej. FLT-8821"
+              placeholder="ej. MHX882"
               className="form-input"
               style={{
                 width: '100%',
@@ -352,10 +449,11 @@ const FormComponent = ({ onSubmit }) => {
               value={answers[28]}
               onChange={(e) => {
                 if (isReadOnly) return;
-                const filtered = e.target.value.replace(/[^a-zA-Z0-9 ]/g, '').toUpperCase();
+                const filtered = e.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6);
                 setAnswers(prev => ({ ...prev, 28: filtered }));
               }}
               disabled={isReadOnly}
+              maxLength={6}
             />
           </div>
 
@@ -498,477 +596,487 @@ const FormComponent = ({ onSubmit }) => {
           {!isHsq && (
             <>
               {/* Subsección: LUCES */}
-          <div className="subsection-header">
-            <span className="sub-icon">💡</span>
-            <span className="sub-title">LUCES</span>
-          </div>
+              <div className="subsection-group">
+                <div className="subsection-header">
+                  <span className="sub-icon">💡</span>
+                  <span className="sub-title">LUCES</span>
+                </div>
 
-          <div className="form-item">
-            <span className="item-label">Altas / Bajas</span>
-            <div className="toggle-group ok-fallo">
-              <button
-                type="button"
-                className={`toggle-btn btn-ok ${answers[7] === 'OK' ? 'selected' : ''}`}
-                onClick={() => handleToggle(7, 'OK')}
-              >
-                OK
-              </button>
-              <button
-                type="button"
-                className={`toggle-btn btn-fail ${answers[7] === 'FALLO' ? 'selected' : ''}`}
-                onClick={() => handleToggle(7, 'FALLO')}
-              >
-                FALLO
-              </button>
-            </div>
-          </div>
+                <div className="form-item">
+                  <span className="item-label">Altas / Bajas</span>
+                  <div className="toggle-group ok-fallo">
+                    <button
+                      type="button"
+                      className={`toggle-btn btn-ok ${answers[7] === 'OK' ? 'selected' : ''}`}
+                      onClick={() => handleToggle(7, 'OK')}
+                    >
+                      OK
+                    </button>
+                    <button
+                      type="button"
+                      className={`toggle-btn btn-fail ${answers[7] === 'FALLO' ? 'selected' : ''}`}
+                      onClick={() => handleToggle(7, 'FALLO')}
+                    >
+                      FALLO
+                    </button>
+                  </div>
+                </div>
 
-          <div className="form-item">
-            <span className="item-label">Retroceso / Emergencia</span>
-            <div className="toggle-group ok-fallo">
-              <button
-                type="button"
-                className={`toggle-btn btn-ok ${answers[8] === 'OK' ? 'selected' : ''}`}
-                onClick={() => handleToggle(8, 'OK')}
-              >
-                OK
-              </button>
-              <button
-                type="button"
-                className={`toggle-btn btn-fail ${answers[8] === 'FALLO' ? 'selected' : ''}`}
-                onClick={() => handleToggle(8, 'FALLO')}
-              >
-                FALLO
-              </button>
-            </div>
-          </div>
+                <div className="form-item">
+                  <span className="item-label">Retroceso / Emergencia</span>
+                  <div className="toggle-group ok-fallo">
+                    <button
+                      type="button"
+                      className={`toggle-btn btn-ok ${answers[8] === 'OK' ? 'selected' : ''}`}
+                      onClick={() => handleToggle(8, 'OK')}
+                    >
+                      OK
+                    </button>
+                    <button
+                      type="button"
+                      className={`toggle-btn btn-fail ${answers[8] === 'FALLO' ? 'selected' : ''}`}
+                      onClick={() => handleToggle(8, 'FALLO')}
+                    >
+                      FALLO
+                    </button>
+                  </div>
+                </div>
 
-          <div className="form-item">
-            <span className="item-label">Laterales (Delante/Trasera)</span>
-            <div className="toggle-group ok-fallo">
-              <button
-                type="button"
-                className={`toggle-btn btn-ok ${answers[9] === 'OK' ? 'selected' : ''}`}
-                onClick={() => handleToggle(9, 'OK')}
-              >
-                OK
-              </button>
-              <button
-                type="button"
-                className={`toggle-btn btn-fail ${answers[9] === 'FALLO' ? 'selected' : ''}`}
-                onClick={() => handleToggle(9, 'FALLO')}
-              >
-                FALLO
-              </button>
-            </div>
-          </div>
+                <div className="form-item">
+                  <span className="item-label">Laterales (Delante/Trasera)</span>
+                  <div className="toggle-group ok-fallo">
+                    <button
+                      type="button"
+                      className={`toggle-btn btn-ok ${answers[9] === 'OK' ? 'selected' : ''}`}
+                      onClick={() => handleToggle(9, 'OK')}
+                    >
+                      OK
+                    </button>
+                    <button
+                      type="button"
+                      className={`toggle-btn btn-fail ${answers[9] === 'FALLO' ? 'selected' : ''}`}
+                      onClick={() => handleToggle(9, 'FALLO')}
+                    >
+                      FALLO
+                    </button>
+                  </div>
+                </div>
 
-          <div className="form-item">
-            <span className="item-label">Freno / Estacionamiento</span>
-            <div className="toggle-group ok-fallo">
-              <button
-                type="button"
-                className={`toggle-btn btn-ok ${answers[10] === 'OK' ? 'selected' : ''}`}
-                onClick={() => handleToggle(10, 'OK')}
-              >
-                OK
-              </button>
-              <button
-                type="button"
-                className={`toggle-btn btn-fail ${answers[10] === 'FALLO' ? 'selected' : ''}`}
-                onClick={() => handleToggle(10, 'FALLO')}
-              >
-                FALLO
-              </button>
-            </div>
-          </div>
+                <div className="form-item">
+                  <span className="item-label">Freno / Estacionamiento</span>
+                  <div className="toggle-group ok-fallo">
+                    <button
+                      type="button"
+                      className={`toggle-btn btn-ok ${answers[10] === 'OK' ? 'selected' : ''}`}
+                      onClick={() => handleToggle(10, 'OK')}
+                    >
+                      OK
+                    </button>
+                    <button
+                      type="button"
+                      className={`toggle-btn btn-fail ${answers[10] === 'FALLO' ? 'selected' : ''}`}
+                      onClick={() => handleToggle(10, 'FALLO')}
+                    >
+                      FALLO
+                    </button>
+                  </div>
+                </div>
 
-          <div className="form-item">
-            <span className="item-label">Cabina Interior</span>
-            <div className="toggle-group ok-fallo">
-              <button
-                type="button"
-                className={`toggle-btn btn-ok ${answers[11] === 'OK' ? 'selected' : ''}`}
-                onClick={() => handleToggle(11, 'OK')}
-              >
-                OK
-              </button>
-              <button
-                type="button"
-                className={`toggle-btn btn-fail ${answers[11] === 'FALLO' ? 'selected' : ''}`}
-                onClick={() => handleToggle(11, 'FALLO')}
-              >
-                FALLO
-              </button>
-            </div>
-          </div>
-
-          {/* Subsección: NEUMÁTICOS */}
-          <div className="subsection-header">
-            <span className="sub-icon">🚗</span>
-            <span className="sub-title">NEUMÁTICOS</span>
-          </div>
-
-          <div className="grid-2x2">
-            <div className="form-item card-grid">
-              <span className="item-label-mini">DEL. IZQUIERDO</span>
-              <div className="toggle-group ok-fallo">
-                <button
-                  type="button"
-                  className={`toggle-btn btn-ok ${answers[12] === 'OK' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(12, 'OK')}
-                >
-                  OK
-                </button>
-                <button
-                  type="button"
-                  className={`toggle-btn btn-fail ${answers[12] === 'FALLO' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(12, 'FALLO')}
-                >
-                  FALLO
-                </button>
+                <div className="form-item">
+                  <span className="item-label">Cabina Interior</span>
+                  <div className="toggle-group ok-fallo">
+                    <button
+                      type="button"
+                      className={`toggle-btn btn-ok ${answers[11] === 'OK' ? 'selected' : ''}`}
+                      onClick={() => handleToggle(11, 'OK')}
+                    >
+                      OK
+                    </button>
+                    <button
+                      type="button"
+                      className={`toggle-btn btn-fail ${answers[11] === 'FALLO' ? 'selected' : ''}`}
+                      onClick={() => handleToggle(11, 'FALLO')}
+                    >
+                      FALLO
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
 
-            <div className="form-item card-grid">
-              <span className="item-label-mini">DEL. DERECHO</span>
-              <div className="toggle-group ok-fallo">
-                <button
-                  type="button"
-                  className={`toggle-btn btn-ok ${answers[13] === 'OK' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(13, 'OK')}
-                >
-                  OK
-                </button>
-                <button
-                  type="button"
-                  className={`toggle-btn btn-fail ${answers[13] === 'FALLO' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(13, 'FALLO')}
-                >
-                  FALLO
-                </button>
+              {/* Subsección: NEUMÁTICOS */}
+              <div className="subsection-group">
+                <div className="subsection-header">
+                  <span className="sub-icon">🚗</span>
+                  <span className="sub-title">NEUMÁTICOS</span>
+                </div>
+
+                <div className="grid-2x2">
+                  <div className="form-item card-grid">
+                    <span className="item-label-mini">DEL. IZQUIERDO</span>
+                    <div className="toggle-group ok-fallo">
+                      <button
+                        type="button"
+                        className={`toggle-btn btn-ok ${answers[12] === 'OK' ? 'selected' : ''}`}
+                        onClick={() => handleToggle(12, 'OK')}
+                      >
+                        OK
+                      </button>
+                      <button
+                        type="button"
+                        className={`toggle-btn btn-fail ${answers[12] === 'FALLO' ? 'selected' : ''}`}
+                        onClick={() => handleToggle(12, 'FALLO')}
+                      >
+                        FALLO
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="form-item card-grid">
+                    <span className="item-label-mini">DEL. DERECHO</span>
+                    <div className="toggle-group ok-fallo">
+                      <button
+                        type="button"
+                        className={`toggle-btn btn-ok ${answers[13] === 'OK' ? 'selected' : ''}`}
+                        onClick={() => handleToggle(13, 'OK')}
+                      >
+                        OK
+                      </button>
+                      <button
+                        type="button"
+                        className={`toggle-btn btn-fail ${answers[13] === 'FALLO' ? 'selected' : ''}`}
+                        onClick={() => handleToggle(13, 'FALLO')}
+                      >
+                        FALLO
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="form-item card-grid">
+                    <span className="item-label-mini">TRAS. INTERNOS</span>
+                    <div className="toggle-group ok-fallo">
+                      <button
+                        type="button"
+                        className={`toggle-btn btn-ok ${answers[14] === 'OK' ? 'selected' : ''}`}
+                        onClick={() => handleToggle(14, 'OK')}
+                      >
+                        OK
+                      </button>
+                      <button
+                        type="button"
+                        className={`toggle-btn btn-fail ${answers[14] === 'FALLO' ? 'selected' : ''}`}
+                        onClick={() => handleToggle(14, 'FALLO')}
+                      >
+                        FALLO
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="form-item card-grid">
+                    <span className="item-label-mini">TRAS. EXTERNOS</span>
+                    <div className="toggle-group ok-fallo">
+                      <button
+                        type="button"
+                        className={`toggle-btn btn-ok ${answers[15] === 'OK' ? 'selected' : ''}`}
+                        onClick={() => handleToggle(15, 'OK')}
+                      >
+                        OK
+                      </button>
+                      <button
+                        type="button"
+                        className={`toggle-btn btn-fail ${answers[15] === 'FALLO' ? 'selected' : ''}`}
+                        onClick={() => handleToggle(15, 'FALLO')}
+                      >
+                        FALLO
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="form-item full-width-item">
+                  <span className="item-label">REPUESTOS</span>
+                  <div className="toggle-group ok-fallo">
+                    <button
+                      type="button"
+                      className={`toggle-btn btn-ok ${answers[16] === 'OK' ? 'selected' : ''}`}
+                      onClick={() => handleToggle(16, 'OK')}
+                    >
+                      OK
+                    </button>
+                    <button
+                      type="button"
+                      className={`toggle-btn btn-fail ${answers[16] === 'FALLO' ? 'selected' : ''}`}
+                      onClick={() => handleToggle(16, 'FALLO')}
+                    >
+                      FALLO
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-
-            <div className="form-item card-grid">
-              <span className="item-label-mini">TRAS. INTERNOS</span>
-              <div className="toggle-group ok-fallo">
-                <button
-                  type="button"
-                  className={`toggle-btn btn-ok ${answers[14] === 'OK' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(14, 'OK')}
-                >
-                  OK
-                </button>
-                <button
-                  type="button"
-                  className={`toggle-btn btn-fail ${answers[14] === 'FALLO' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(14, 'FALLO')}
-                >
-                  FALLO
-                </button>
-              </div>
-            </div>
-
-            <div className="form-item card-grid">
-              <span className="item-label-mini">TRAS. EXTERNOS</span>
-              <div className="toggle-group ok-fallo">
-                <button
-                  type="button"
-                  className={`toggle-btn btn-ok ${answers[15] === 'OK' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(15, 'OK')}
-                >
-                  OK
-                </button>
-                <button
-                  type="button"
-                  className={`toggle-btn btn-fail ${answers[15] === 'FALLO' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(15, 'FALLO')}
-                >
-                  FALLO
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="form-item full-width-item">
-            <span className="item-label">REPUESTOS</span>
-            <div className="toggle-group ok-fallo">
-              <button
-                type="button"
-                className={`toggle-btn btn-ok ${answers[16] === 'OK' ? 'selected' : ''}`}
-                onClick={() => handleToggle(16, 'OK')}
-              >
-                OK
-              </button>
-              <button
-                type="button"
-                className={`toggle-btn btn-fail ${answers[16] === 'FALLO' ? 'selected' : ''}`}
-                onClick={() => handleToggle(16, 'FALLO')}
-              >
-                FALLO
-              </button>
-            </div>
-          </div>
-
-          </>
+            </>
           )}
 
           {/* Subsección: ACCESORIOS Y SEGURIDAD */}
-          <div className="subsection-header">
-            <span className="sub-icon">🛡️</span>
-            <span className="sub-title">ACCESORIOS Y SEGURIDAD</span>
-          </div>
+          <div className="subsection-group">
+            <div className="subsection-header">
+              <span className="sub-icon">🛡️</span>
+              <span className="sub-title">ACCESORIOS Y SEGURIDAD</span>
+            </div>
 
-          <div className="grid-2x2">
-            <div className="form-item card-grid">
-              <span className="item-label-mini">Extintor/Botiquín</span>
-              <div className="toggle-group two-states">
-                <button
-                  type="button"
-                  className={`toggle-btn btn-yes ${answers[17] === 'SI' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(17, 'SI')}
-                >
-                  SÍ
-                </button>
-                <button
-                  type="button"
-                  className={`toggle-btn btn-no ${answers[17] === 'NO' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(17, 'NO')}
-                >
-                  NO
-                </button>
+            <div className="grid-2x2">
+              <div className="form-item card-grid">
+                <span className="item-label-mini">Extintor/Botiquín</span>
+                <div className="toggle-group two-states">
+                  <button
+                    type="button"
+                    className={`toggle-btn btn-yes ${answers[17] === 'SI' ? 'selected' : ''}`}
+                    onClick={() => handleToggle(17, 'SI')}
+                  >
+                    SÍ
+                  </button>
+                  <button
+                    type="button"
+                    className={`toggle-btn btn-no ${answers[17] === 'NO' ? 'selected' : ''}`}
+                    onClick={() => handleToggle(17, 'NO')}
+                  >
+                    NO
+                  </button>
+                </div>
+              </div>
+
+              <div className="form-item card-grid">
+                <span className="item-label-mini">Conos/Bocina</span>
+                <div className="toggle-group two-states">
+                  <button
+                    type="button"
+                    className={`toggle-btn btn-yes ${answers[18] === 'SI' ? 'selected' : ''}`}
+                    onClick={() => handleToggle(18, 'SI')}
+                  >
+                    SÍ
+                  </button>
+                  <button
+                    type="button"
+                    className={`toggle-btn btn-no ${answers[18] === 'NO' ? 'selected' : ''}`}
+                    onClick={() => handleToggle(18, 'NO')}
+                  >
+                    NO
+                  </button>
+                </div>
+              </div>
+
+              <div className="form-item card-grid">
+                <span className="item-label-mini">Sirena/Licuadora</span>
+                <div className="toggle-group two-states">
+                  <button
+                    type="button"
+                    className={`toggle-btn btn-yes ${answers[19] === 'SI' ? 'selected' : ''}`}
+                    onClick={() => handleToggle(19, 'SI')}
+                  >
+                    SÍ
+                  </button>
+                  <button
+                    type="button"
+                    className={`toggle-btn btn-no ${answers[19] === 'NO' ? 'selected' : ''}`}
+                    onClick={() => handleToggle(19, 'NO')}
+                  >
+                    NO
+                  </button>
+                </div>
+              </div>
+
+              <div className="form-item card-grid">
+                <span className="item-label-mini">Evaluador Cop.</span>
+                <div className="toggle-group two-states">
+                  <button
+                    type="button"
+                    className={`toggle-btn btn-yes ${answers[20] === 'SI' ? 'selected' : ''}`}
+                    onClick={() => handleToggle(20, 'SI')}
+                  >
+                    SÍ
+                  </button>
+                  <button
+                    type="button"
+                    className={`toggle-btn btn-no ${answers[20] === 'NO' ? 'selected' : ''}`}
+                    onClick={() => handleToggle(20, 'NO')}
+                  >
+                    NO
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="form-item card-grid">
-              <span className="item-label-mini">Conos/Bocina</span>
-              <div className="toggle-group two-states">
+            <div className="form-item full-width-item">
+              <span className="item-label font-small">Cortacorrientes / Sist. Comunicación</span>
+              <div className="toggle-group ok-fallo">
                 <button
                   type="button"
-                  className={`toggle-btn btn-yes ${answers[18] === 'SI' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(18, 'SI')}
+                  className={`toggle-btn btn-ok ${answers[21] === 'OK' ? 'selected' : ''}`}
+                  onClick={() => handleToggle(21, 'OK')}
                 >
-                  SÍ
+                  OK
                 </button>
                 <button
                   type="button"
-                  className={`toggle-btn btn-no ${answers[18] === 'NO' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(18, 'NO')}
+                  className={`toggle-btn btn-fail ${answers[21] === 'FALLO' ? 'selected' : ''}`}
+                  onClick={() => handleToggle(21, 'FALLO')}
                 >
-                  NO
-                </button>
-              </div>
-            </div>
-
-            <div className="form-item card-grid">
-              <span className="item-label-mini">Sirena/Licuadora</span>
-              <div className="toggle-group two-states">
-                <button
-                  type="button"
-                  className={`toggle-btn btn-yes ${answers[19] === 'SI' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(19, 'SI')}
-                >
-                  SÍ
-                </button>
-                <button
-                  type="button"
-                  className={`toggle-btn btn-no ${answers[19] === 'NO' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(19, 'NO')}
-                >
-                  NO
+                  FALLO
                 </button>
               </div>
-            </div>
-
-            <div className="form-item card-grid">
-              <span className="item-label-mini">Evaluador Cop.</span>
-              <div className="toggle-group two-states">
-                <button
-                  type="button"
-                  className={`toggle-btn btn-yes ${answers[20] === 'SI' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(20, 'SI')}
-                >
-                  SÍ
-                </button>
-                <button
-                  type="button"
-                  className={`toggle-btn btn-no ${answers[20] === 'NO' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(20, 'NO')}
-                >
-                  NO
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="form-item full-width-item">
-            <span className="item-label font-small">Cortacorrientes / Sist. Comunicación</span>
-            <div className="toggle-group ok-fallo">
-              <button
-                type="button"
-                className={`toggle-btn btn-ok ${answers[21] === 'OK' ? 'selected' : ''}`}
-                onClick={() => handleToggle(21, 'OK')}
-              >
-                OK
-              </button>
-              <button
-                type="button"
-                className={`toggle-btn btn-fail ${answers[21] === 'FALLO' ? 'selected' : ''}`}
-                onClick={() => handleToggle(21, 'FALLO')}
-              >
-                FALLO
-              </button>
             </div>
           </div>
 
           {!isHsq && (
             <>
               {/* Subsección: VIDRIOS */}
-              <div className="subsection-header">
-            <span className="sub-icon">🪟</span>
-            <span className="sub-title">VIDRIOS</span>
-          </div>
+              <div className="subsection-group">
+                <div className="subsection-header">
+                  <span className="sub-icon">🪟</span>
+                  <span className="sub-title">VIDRIOS</span>
+                </div>
 
-          <div className="grid-2x1">
-            <div className="form-item card-grid">
-              <span className="item-label-mini">PARABRISAS</span>
-              <div className="toggle-group ok-fallo">
-                <button
-                  type="button"
-                  className={`toggle-btn btn-ok ${answers[22] === 'OK' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(22, 'OK')}
-                >
-                  OK
-                </button>
-                <button
-                  type="button"
-                  className={`toggle-btn btn-fail ${answers[22] === 'FALLO' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(22, 'FALLO')}
-                >
-                  FALLO
-                </button>
+                <div className="grid-2x1">
+                  <div className="form-item card-grid">
+                    <span className="item-label-mini">PARABRISAS</span>
+                    <div className="toggle-group ok-fallo">
+                      <button
+                        type="button"
+                        className={`toggle-btn btn-ok ${answers[22] === 'OK' ? 'selected' : ''}`}
+                        onClick={() => handleToggle(22, 'OK')}
+                      >
+                        OK
+                      </button>
+                      <button
+                        type="button"
+                        className={`toggle-btn btn-fail ${answers[22] === 'FALLO' ? 'selected' : ''}`}
+                        onClick={() => handleToggle(22, 'FALLO')}
+                      >
+                        FALLO
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="form-item card-grid">
+                    <span className="item-label-mini">IZQUIERDO/DER.</span>
+                    <div className="toggle-group ok-fallo">
+                      <button
+                        type="button"
+                        className={`toggle-btn btn-ok ${answers[23] === 'OK' ? 'selected' : ''}`}
+                        onClick={() => handleToggle(23, 'OK')}
+                      >
+                        OK
+                      </button>
+                      <button
+                        type="button"
+                        className={`toggle-btn btn-fail ${answers[23] === 'FALLO' ? 'selected' : ''}`}
+                        onClick={() => handleToggle(23, 'FALLO')}
+                      >
+                        FALLO
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
 
-            <div className="form-item card-grid">
-              <span className="item-label-mini">IZQUIERDO/DER.</span>
-              <div className="toggle-group ok-fallo">
-                <button
-                  type="button"
-                  className={`toggle-btn btn-ok ${answers[23] === 'OK' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(23, 'OK')}
-                >
-                  OK
-                </button>
-                <button
-                  type="button"
-                  className={`toggle-btn btn-fail ${answers[23] === 'FALLO' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(23, 'FALLO')}
-                >
-                  FALLO
-                </button>
+              {/* Subsección: ESPEJOS */}
+              <div className="subsection-group">
+                <div className="subsection-header">
+                  <span className="sub-icon">🪞</span>
+                  <span className="sub-title">ESPEJOS</span>
+                </div>
+
+                <div className="grid-2x1">
+                  <div className="form-item card-grid">
+                    <span className="item-label-mini">LATERALES</span>
+                    <div className="toggle-group ok-fallo">
+                      <button
+                        type="button"
+                        className={`toggle-btn btn-ok ${answers[24] === 'OK' ? 'selected' : ''}`}
+                        onClick={() => handleToggle(24, 'OK')}
+                      >
+                        OK
+                      </button>
+                      <button
+                        type="button"
+                        className={`toggle-btn btn-fail ${answers[24] === 'FALLO' ? 'selected' : ''}`}
+                        onClick={() => handleToggle(24, 'FALLO')}
+                      >
+                        FALLO
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="form-item card-grid">
+                    <span className="item-label-mini">CABINA</span>
+                    <div className="toggle-group ok-fallo">
+                      <button
+                        type="button"
+                        className={`toggle-btn btn-ok ${answers[25] === 'OK' ? 'selected' : ''}`}
+                        onClick={() => handleToggle(25, 'OK')}
+                      >
+                        OK
+                      </button>
+                      <button
+                        type="button"
+                        className={`toggle-btn btn-fail ${answers[25] === 'FALLO' ? 'selected' : ''}`}
+                        onClick={() => handleToggle(25, 'FALLO')}
+                      >
+                        FALLO
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
 
-          {/* Subsección: ESPEJOS */}
-          <div className="subsection-header">
-            <span className="sub-icon">🪞</span>
-            <span className="sub-title">ESPEJOS</span>
-          </div>
+              {/* Subsección: ESTABILIZADORES */}
+              <div className="subsection-group">
+                <div className="subsection-header">
+                  <span className="sub-icon">🔩</span>
+                  <span className="sub-title">ESTABILIZADORES</span>
+                </div>
 
-          <div className="grid-2x1">
-            <div className="form-item card-grid">
-              <span className="item-label-mini">LATERALES</span>
-              <div className="toggle-group ok-fallo">
-                <button
-                  type="button"
-                  className={`toggle-btn btn-ok ${answers[24] === 'OK' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(24, 'OK')}
-                >
-                  OK
-                </button>
-                <button
-                  type="button"
-                  className={`toggle-btn btn-fail ${answers[24] === 'FALLO' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(24, 'FALLO')}
-                >
-                  FALLO
-                </button>
+                <div className="grid-2x1">
+                  <div className="form-item card-grid">
+                    <span className="item-label-mini">Delant. Izq/Der</span>
+                    <div className="toggle-group ok-fallo">
+                      <button
+                        type="button"
+                        className={`toggle-btn btn-ok ${answers[26] === 'OK' ? 'selected' : ''}`}
+                        onClick={() => handleToggle(26, 'OK')}
+                      >
+                        OK
+                      </button>
+                      <button
+                        type="button"
+                        className={`toggle-btn btn-fail ${answers[26] === 'FALLO' ? 'selected' : ''}`}
+                        onClick={() => handleToggle(26, 'FALLO')}
+                      >
+                        FALLO
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="form-item card-grid">
+                    <span className="item-label-mini">Tras. Izq/Der</span>
+                    <div className="toggle-group ok-fallo">
+                      <button
+                        type="button"
+                        className={`toggle-btn btn-ok ${answers[27] === 'OK' ? 'selected' : ''}`}
+                        onClick={() => handleToggle(27, 'OK')}
+                      >
+                        OK
+                      </button>
+                      <button
+                        type="button"
+                        className={`toggle-btn btn-fail ${answers[27] === 'FALLO' ? 'selected' : ''}`}
+                        onClick={() => handleToggle(27, 'FALLO')}
+                      >
+                        FALLO
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
-
-            <div className="form-item card-grid">
-              <span className="item-label-mini">CABINA</span>
-              <div className="toggle-group ok-fallo">
-                <button
-                  type="button"
-                  className={`toggle-btn btn-ok ${answers[25] === 'OK' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(25, 'OK')}
-                >
-                  OK
-                </button>
-                <button
-                  type="button"
-                  className={`toggle-btn btn-fail ${answers[25] === 'FALLO' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(25, 'FALLO')}
-                >
-                  FALLO
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Subsección: ESTABILIZADORES */}
-          <div className="subsection-header">
-            <span className="sub-icon">🔩</span>
-            <span className="sub-title">ESTABILIZADORES</span>
-          </div>
-
-          <div className="grid-2x1">
-            <div className="form-item card-grid">
-              <span className="item-label-mini">Delant. Izq/Der</span>
-              <div className="toggle-group ok-fallo">
-                <button
-                  type="button"
-                  className={`toggle-btn btn-ok ${answers[26] === 'OK' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(26, 'OK')}
-                >
-                  OK
-                </button>
-                <button
-                  type="button"
-                  className={`toggle-btn btn-fail ${answers[26] === 'FALLO' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(26, 'FALLO')}
-                >
-                  FALLO
-                </button>
-              </div>
-            </div>
-
-            <div className="form-item card-grid">
-              <span className="item-label-mini">Tras. Izq/Der</span>
-              <div className="toggle-group ok-fallo">
-                <button
-                  type="button"
-                  className={`toggle-btn btn-ok ${answers[27] === 'OK' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(27, 'OK')}
-                >
-                  OK
-                </button>
-                <button
-                  type="button"
-                  className={`toggle-btn btn-fail ${answers[27] === 'FALLO' ? 'selected' : ''}`}
-                  onClick={() => handleToggle(27, 'FALLO')}
-                >
-                  FALLO
-                </button>
-              </div>
-            </div>
-          </div>
-
-          </>
+            </>
           )}
 
           {/* Observaciones Técnicas */}
@@ -1002,8 +1110,8 @@ const FormComponent = ({ onSubmit }) => {
               ) : (
                 <div className="upload-placeholder">
                   <span className="camera-icon">📷</span>
-                  <span className="upload-text">VISTA FRONTAL</span>
-                  <span className="add-photo-label">add_a_photo</span>
+                  <span className="upload-text">AÑADIR FOTO</span>
+                  <span className="add-photo-label">Vista Frontal</span>
                 </div>
               )}
             </label>
@@ -1041,27 +1149,6 @@ const FormComponent = ({ onSubmit }) => {
           {isSubmitting ? 'ENVIANDO...' : isCuadrilla ? 'CONFIRMAR Y VERIFICAR INSPECCIÓN' : 'FINALIZAR Y ENVIAR INSPECCIÓN'}
         </button>
       </form>
-
-      {/* ===== BOTTOM NAVIGATION BAR ===== */}
-      <div className="bottom-navigation-bar">
-        <button
-          type="button"
-          className="nav-item-btn"
-          onClick={() => {
-            // Ir al panel
-            if (onSubmit) {
-              onSubmit({ action: 'go_panel' });
-            }
-          }}
-        >
-          <span className="nav-icon">📊</span>
-          <span className="nav-text">PANEL</span>
-        </button>
-        <button type="button" className="nav-item-btn active">
-          <span className="nav-icon">📋</span>
-          <span className="nav-text">NUEVA INSPECCIÓN</span>
-        </button>
-      </div>
     </div>
   );
 };
