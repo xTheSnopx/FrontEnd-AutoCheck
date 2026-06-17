@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import '../styles/Dashboard.css';
 
 /* ===== ICONS ===== */
@@ -45,14 +46,47 @@ const IconPlus = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 );
 
-export default function Dashboard({ onNewInspection }) {
+export default function Dashboard({ onNewInspection, onLogout }) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   return (
     <div className="dashboard">
+      {/* ===== SIDEBAR (DRAWER) ===== */}
+      <aside className={`admin-sidebar ${sidebarOpen ? 'open' : ''}`} style={{ 
+        position: 'fixed', 
+        top: 0, 
+        left: 0, 
+        height: '100%', 
+        width: '280px', 
+        zIndex: 1000, 
+        backgroundColor: '#1e293b', 
+        padding: '20px', 
+        boxShadow: '2px 0 10px rgba(0,0,0,0.1)', 
+        transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)', 
+        transition: 'transform 0.3s ease',
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', color: '#fff' }}>
+          <h2 style={{ fontSize: '20px', margin: 0 }}>Menú</h2>
+          <button onClick={() => setSidebarOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '24px', padding: '5px', color: '#fff' }}>&times;</button>
+        </div>
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+          <button onClick={() => { setSidebarOpen(false); onNewInspection(); }} style={{ background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: '16px', padding: '12px', display: 'flex', alignItems: 'center', gap: '10px', color: '#cbd5e1', borderRadius: '8px', width: '100%', transition: 'background 0.2s' }}>
+            <span>📝 Nueva Inspección</span>
+          </button>
+          <button onClick={onLogout} style={{ background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: '16px', padding: '12px', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '10px', marginTop: '20px', borderTop: '1px solid #334155', width: '100%' }}>
+            <span>🚪 Cerrar Sesión</span>
+          </button>
+        </nav>
+      </aside>
+      {sidebarOpen && <div onClick={() => setSidebarOpen(false)} style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 999 }} />}
+
       {/* ===== HEADER ===== */}
       <header className="dash-header">
-        <button className="dash-icon-btn" aria-label="Menu"><IconMenu /></button>
+        <button className="dash-icon-btn" aria-label="Menu" onClick={() => setSidebarOpen(true)}><IconMenu /></button>
         <h1 className="dash-brand">AutoCheckAML</h1>
-        <button className="dash-icon-btn" aria-label="Salir"><IconExit /></button>
+        <button className="dash-icon-btn" aria-label="Salir" onClick={onLogout}><IconExit /></button>
       </header>
 
       {/* ===== MAIN CONTENT ===== */}

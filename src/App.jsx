@@ -19,6 +19,9 @@ function App() {
           userRoles.includes('DEV') || 
           userRoles.includes('SOFTWARE') || 
           userRoles.includes('Administrator') || 
+          userRoles.includes('INGENIERO_MECANICO') || 
+          userRoles.includes('SUPERVISOR_HSEQ') || 
+          userRoles.includes('JEFE_MTTO') || 
           user.username?.toLowerCase() === 'admin'
         ) {
           setScreen('admin-dashboard');
@@ -39,6 +42,9 @@ function App() {
       userRoles.includes('DEV') || 
       userRoles.includes('SOFTWARE') || 
       userRoles.includes('Administrator') || 
+      userRoles.includes('INGENIERO_MECANICO') || 
+      userRoles.includes('SUPERVISOR_HSEQ') || 
+      userRoles.includes('JEFE_MTTO') || 
       loginData?.username?.toLowerCase() === 'admin'
     ) {
       setScreen('admin-dashboard');
@@ -68,6 +74,9 @@ function App() {
           userRoles.includes('DEV') || 
           userRoles.includes('SOFTWARE') || 
           userRoles.includes('Administrator') || 
+          userRoles.includes('INGENIERO_MECANICO') || 
+          userRoles.includes('SUPERVISOR_HSEQ') || 
+          userRoles.includes('JEFE_MTTO') || 
           user.username?.toLowerCase() === 'admin'
         ) {
           setScreen('admin-dashboard');
@@ -85,7 +94,7 @@ function App() {
   }
 
   if (screen === 'dashboard') {
-    return <Dashboard onNewInspection={handleNewInspection} />;
+    return <Dashboard onNewInspection={handleNewInspection} onLogout={handleLogout} />;
   }
 
   if (screen === 'admin-dashboard') {

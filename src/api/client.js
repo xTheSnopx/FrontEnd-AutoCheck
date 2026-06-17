@@ -1,13 +1,14 @@
 import axios from 'axios';
 import { storage } from '../utils/storage';
+import { API_CONFIG } from '../config/api.config';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const BASE_URL = API_CONFIG.BASE_URL;
 
 // ===== Instancia axios centralizada =====
 export const apiClient = axios.create({
   baseURL: BASE_URL,
   headers: { 'Content-Type': 'application/json' },
-  timeout: 15000,
+  timeout: API_CONFIG.TIMEOUT,
 });
 
 // ===== Interceptor de request: inyecta el JWT =====

@@ -1,8 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { formsApi } from '../api/forms.api';
+import { useToast } from '../contexts/ToastContext';
+import logger from '../utils/logger';
 import '../styles/FormComponent.css';
 
 const FormComponent = ({ onSubmit }) => {
+  const { showToast } = useToast();
   const userStr = localStorage.getItem('user') || sessionStorage.getItem('user');
   let userRoles = [];
   let userFullName = '';
@@ -12,11 +15,11 @@ const FormComponent = ({ onSubmit }) => {
       userRoles = parsed.roles || [];
       userFullName = parsed.fullName || parsed.username || '';
     } catch (e) {
-      console.error(e);
+      logger.error('Error parsing user data:', e);
     }
   }
 
-  const isHsq = userRoles.includes('INGENIERO_HSQ');
+  const isHsq = userRoles.includes('SUPERVISOR_HSEQ');
   const isCuadrilla = userRoles.includes('CUADRILLA');
   const isReadOnly = isCuadrilla;
 
@@ -58,6 +61,8 @@ const FormComponent = ({ onSubmit }) => {
     // 3. Estabilizadores
     26: 'OK', // Delant. Izq/Der
     27: 'OK', // Tras. Izq/Der
+    // Placa del Vehículo
+    28: '', 
   });
 
   const [observations, setObservations] = useState('');
@@ -182,6 +187,12 @@ const FormComponent = ({ onSubmit }) => {
   // Manejo de envío de formulario
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!answers[28] || !answers[28].trim()) {
+      showToast('Por favor, ingrese la placa del vehículo antes de enviar.', 'warning');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -204,15 +215,15 @@ const FormComponent = ({ onSubmit }) => {
       // Enviar a la API de base de datos
       await formsApi.create(payload);
 
-      alert('Inspección guardada y sincronizada en el BackEnd exitosamente.');
+      showToast('Inspección guardada y sincronizada en el BackEnd exitosamente.', 'success');
       
       // Callback local de React
       if (onSubmit) {
         onSubmit(payload);
       }
     } catch (error) {
-      console.error(error);
-      alert('Error al enviar la inspección al servidor. Guardando en modo local.');
+      logger.error('Error submitting form:', error);
+      showToast('Error al enviar la inspección al servidor. Guardando en modo local.', 'warning');
       // Fallback local
       if (onSubmit) {
         onSubmit({
@@ -322,10 +333,36 @@ const FormComponent = ({ onSubmit }) => {
         <div className="section-card" ref={sectionRefs.doc}>
           <h2 className="section-title">1. DOCUMENTOS</h2>
 
+          {/* Placa del Vehículo */}
+          <div className="form-item" style={{ marginBottom: '20px' }}>
+            <span className="item-label" style={{ fontWeight: 'bold', color: 'var(--color-primary)' }}>Placa del Vehículo *</span>
+            <input
+              type="text"
+              placeholder="ej. FLT-8821"
+              className="form-input"
+              style={{
+                width: '100%',
+                padding: '13px 14px',
+                border: '1.5px solid var(--color-border)',
+                borderRadius: 'var(--radius-md)',
+                fontSize: 'var(--font-size-md)',
+                marginTop: '6px',
+                textTransform: 'uppercase'
+              }}
+              value={answers[28]}
+              onChange={(e) => {
+                if (isReadOnly) return;
+                const filtered = e.target.value.replace(/[^a-zA-Z0-9 ]/g, '').toUpperCase();
+                setAnswers(prev => ({ ...prev, 28: filtered }));
+              }}
+              disabled={isReadOnly}
+            />
+          </div>
+
           {/* Permiso de Circulación */}
           <div className="form-item">
             <span className="item-label">Permiso de Circulación al Día</span>
-            <div className="toggle-group three-states">
+            <div className="toggle-group two-states">
               <button
                 type="button"
                 className={`toggle-btn btn-yes ${answers[1] === 'SI' ? 'selected' : ''}`}
@@ -340,20 +377,13 @@ const FormComponent = ({ onSubmit }) => {
               >
                 NO
               </button>
-              <button
-                type="button"
-                className={`toggle-btn btn-na ${answers[1] === 'NA' ? 'selected' : ''}`}
-                onClick={() => handleToggle(1, 'NA')}
-              >
-                NA
-              </button>
             </div>
           </div>
 
           {/* Revisión Tecnomecánica */}
           <div className="form-item">
             <span className="item-label">Revisión Tecnomecánica al Día</span>
-            <div className="toggle-group three-states">
+            <div className="toggle-group two-states">
               <button
                 type="button"
                 className={`toggle-btn btn-yes ${answers[2] === 'SI' ? 'selected' : ''}`}
@@ -368,20 +398,13 @@ const FormComponent = ({ onSubmit }) => {
               >
                 NO
               </button>
-              <button
-                type="button"
-                className={`toggle-btn btn-na ${answers[2] === 'NA' ? 'selected' : ''}`}
-                onClick={() => handleToggle(2, 'NA')}
-              >
-                NA
-              </button>
             </div>
           </div>
 
           {/* SOAT */}
           <div className="form-item">
             <span className="item-label">SOAT Vigente</span>
-            <div className="toggle-group three-states">
+            <div className="toggle-group two-states">
               <button
                 type="button"
                 className={`toggle-btn btn-yes ${answers[3] === 'SI' ? 'selected' : ''}`}
@@ -395,13 +418,6 @@ const FormComponent = ({ onSubmit }) => {
                 onClick={() => handleToggle(3, 'NO')}
               >
                 NO
-              </button>
-              <button
-                type="button"
-                className={`toggle-btn btn-na ${answers[3] === 'NA' ? 'selected' : ''}`}
-                onClick={() => handleToggle(3, 'NA')}
-              >
-                NA
               </button>
             </div>
           </div>

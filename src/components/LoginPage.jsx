@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { getApiUrl } from '../config/api.config';
+import { useToast } from '../contexts/ToastContext';
 import '../styles/Login.css';
 
 // ===== ICONS (inline SVG para no depender de librerías) =====
@@ -76,6 +78,7 @@ const Spinner = () => <div className="spinner" aria-label="Cargando..." />;
 
 // ===== LOGIN PAGE =====
 export default function LoginPage({ onLoginSuccess }) {
+  const { showToast } = useToast();
   const [formData, setFormData] = useState({ username: '', password: '', rememberMe: false });
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
@@ -110,7 +113,7 @@ export default function LoginPage({ onLoginSuccess }) {
     setGlobalError('');
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/auth/login`, {
+      const response = await fetch(getApiUrl('/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -208,7 +211,7 @@ export default function LoginPage({ onLoginSuccess }) {
               <button
                 type="button"
                 className="login-forgot-link"
-                onClick={() => alert('Funcionalidad de recuperación próximamente.')}
+                onClick={() => showToast('Funcionalidad de recuperación próximamente.', 'info')}
               >
                 ¿Olvidó su clave?
               </button>
@@ -276,7 +279,7 @@ export default function LoginPage({ onLoginSuccess }) {
         type="button"
         className="support-fab"
         id="btn-support"
-        onClick={() => alert('Canal de soporte técnico: soporte@autocheckaml.com')}
+        onClick={() => showToast('Canal de soporte técnico: soporte@autocheckaml.com', 'info')}
         aria-label="Contactar Soporte"
       >
         <IconHeadset />

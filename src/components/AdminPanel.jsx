@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useToast } from '../contexts/ToastContext';
 import '../styles/AdminPanel.css';
 
 // ===== ICONS (Inline SVG to avoid dependency issues) =====
@@ -38,6 +39,10 @@ const IconPencil = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
 );
 
+const IconKey = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+);
+
 const IconTruck = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
 );
@@ -70,7 +75,12 @@ const IconSupport = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
 );
 
+const IconExit = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+);
+
 export default function AdminPanel({ onLogout, onNewInspection }) {
+  const { showToast } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDate, setFilterDate] = useState('');
@@ -130,6 +140,12 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
     managedByUserId: ''
   });
 
+  // Password Change State
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordChangeUser, setPasswordChangeUser] = useState(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
   // Local Session Audit Timeline simulation
   const [auditLogs, setAuditLogs] = useState([]);
 
@@ -144,13 +160,34 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
     setAuditLogs(prev => [newLog, ...prev]);
   };
 
+  const getApiUrl = (endpoint) => {
+    const base = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    return `${base}${cleanEndpoint}`;
+  };
+
+  const adminFetch = async (url, options = {}) => {
+    const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+    if (!token) throw new Error('No token found');
+    const headers = {
+      ...options.headers,
+      'Authorization': `Bearer ${token}`,
+    };
+    const res = await fetch(url, {
+      ...options,
+      headers,
+    });
+    if (res.status === 401) {
+      console.warn('Unauthorized request (401), logging out...');
+      onLogout();
+      throw new Error('Unauthorized');
+    }
+    return res;
+  };
+
   const fetchUsers = async () => {
     try {
-      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-      if (!token) return;
-      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/Users`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const res = await adminFetch(getApiUrl('/Users'));
       if (res.ok) {
         const data = await res.json();
         setUsers(data || []);
@@ -162,11 +199,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
 
   const fetchRoles = async () => {
     try {
-      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-      if (!token) return;
-      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/Roles`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const res = await adminFetch(getApiUrl('/Roles'));
       if (res.ok) {
         const data = await res.json();
         setRoles(data || []);
@@ -178,11 +211,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
 
   const fetchPermissions = async () => {
     try {
-      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-      if (!token) return;
-      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/Roles/permissions`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const res = await adminFetch(getApiUrl('/Roles/permissions'));
       if (res.ok) {
         const data = await res.json();
         setPermissions(data || []);
@@ -194,11 +223,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
 
   const fetchCrews = async () => {
     try {
-      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-      if (!token) return;
-      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/Crews`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const res = await adminFetch(getApiUrl('/Crews'));
       if (res.ok) {
         const data = await res.json();
         setCrews(data || []);
@@ -210,12 +235,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
 
   const fetchSubmissionsData = async () => {
     try {
-      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-      if (!token) return;
-
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/FormSubmissions?pageSize=100`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const response = await adminFetch(getApiUrl('/FormSubmissions?pageSize=100'));
 
       if (response.ok) {
         const data = await response.json();
@@ -453,13 +473,13 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
               headers: { 'Authorization': `Bearer ${token}` }
             });
           }
-          alert('Usuario creado exitosamente');
+          showToast('Usuario creado exitosamente', 'success');
           addAuditLog('USER_CREATE', `Usuario creado: ${userFormData.username} (${userFormData.fullName})`);
           setShowUserModal(false);
           fetchUsers();
         } else {
           const errData = await createRes.json();
-          alert(`Error: ${errData.message || 'No se pudo crear el usuario'}`);
+          showToast(errData.message || 'No se pudo crear el usuario', 'error');
         }
       } else {
         const editRes = await fetch(`${apiUrl}/Users/${selectedUser.id}`, {
@@ -494,18 +514,71 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
               headers: { 'Authorization': `Bearer ${token}` }
             });
           }
-          alert('Usuario actualizado exitosamente');
+          showToast('Usuario actualizado exitosamente', 'success');
           addAuditLog('USER_UPDATE', `Usuario actualizado: ${userFormData.username}`);
           setShowUserModal(false);
           fetchUsers();
         } else {
           const errData = await editRes.json();
-          alert(`Error: ${errData.message || 'No se pudo actualizar el usuario'}`);
+          showToast(errData.message || 'No se pudo actualizar el usuario', 'error');
         }
       }
     } catch (err) {
       console.error(err);
-      alert('Ocurrió un error inesperado');
+      showToast('Ocurrió un error inesperado', 'error');
+    }
+  };
+
+  const handleOpenPasswordModal = (user) => {
+    setPasswordChangeUser(user);
+    setNewPassword('');
+    setConfirmPassword('');
+    setShowPasswordModal(true);
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+
+    if (newPassword !== confirmPassword) {
+      showToast('Las contraseñas no coinciden', 'warning');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      showToast('La contraseña debe tener al menos 6 caracteres', 'warning');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+      if (!token) return;
+
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const res = await fetch(`${apiUrl}/Users/${passwordChangeUser.id}/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          newPassword: newPassword
+        })
+      });
+
+      if (res.ok) {
+        showToast('Contraseña actualizada exitosamente', 'success');
+        addAuditLog('PASSWORD_CHANGE', `Contraseña cambiada para usuario: ${passwordChangeUser.username}`);
+        setShowPasswordModal(false);
+        setNewPassword('');
+        setConfirmPassword('');
+        setPasswordChangeUser(null);
+      } else {
+        const errData = await res.json();
+        showToast(errData.message || 'No se pudo cambiar la contraseña', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Ocurrió un error inesperado', 'error');
     }
   };
 
@@ -519,11 +592,11 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
-        alert('Usuario eliminado exitosamente');
+        showToast('Usuario eliminado exitosamente', 'success');
         addAuditLog('USER_DELETE', `Usuario ID ${userId} eliminado`);
         fetchUsers();
       } else {
-        alert('No se pudo eliminar el usuario');
+        showToast('No se pudo eliminar el usuario', 'error');
       }
     } catch (err) {
       console.error(err);
@@ -546,7 +619,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
         addAuditLog('PERMISSION_CHANGE', `Permiso ${permissionId} ${hasPermission ? 'revocado de' : 'otorgado a'} rol ${roleId}`);
         fetchRoles();
       } else {
-        alert('No tiene permisos para modificar los permisos de este rol o el endpoint falló.');
+        showToast('No tiene permisos para modificar los permisos de este rol o el endpoint falló.', 'error');
       }
     } catch (err) {
       console.error(err);
@@ -588,13 +661,13 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
       });
 
       if (res.ok) {
-        alert('Cuadrilla creada exitosamente');
+        showToast('Cuadrilla creada exitosamente', 'success');
         addAuditLog('CREW_CREATE', `Cuadrilla creada: ${crewFormData.name}`);
         setShowCrewModal(false);
         fetchCrews();
       } else {
         const data = await res.json();
-        alert(`Error: ${data.message || 'No se pudo crear la cuadrilla'}`);
+        showToast(data.message || 'No se pudo crear la cuadrilla', 'error');
       }
     } catch (err) {
       console.error(err);
@@ -616,7 +689,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
-        alert('Miembro agregado');
+        showToast('Miembro agregado', 'success');
         fetchCrews();
         fetchUsers();
         // refresh selected crew
@@ -628,7 +701,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
           setSelectedCrew(updatedCrew);
         }
       } else {
-        alert('Error al agregar miembro');
+        showToast('Error al agregar miembro', 'error');
       }
     } catch (err) {
       console.error(err);
@@ -645,7 +718,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
-        alert('Miembro removido');
+        showToast('Miembro removido', 'success');
         fetchCrews();
         fetchUsers();
         // refresh selected crew
@@ -657,7 +730,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
           setSelectedCrew(updatedCrew);
         }
       } else {
-        alert('Error al remover miembro');
+        showToast('Error al remover miembro', 'error');
       }
     } catch (err) {
       console.error(err);
@@ -719,7 +792,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
     const stateStatus = status === 'Approved' ? 'OPERATIVO' : status === 'Rejected' ? 'INOPERATIVO' : 'PROGRAMADO';
 
     if (success) {
-      alert(`Estado actualizado a ${status} exitosamente.`);
+      showToast(`Estado actualizado a ${status} exitosamente.`, 'success');
       addAuditLog('SUBMISSION_STATUS', `Inspección ID ${selectedSubmission.id} marcada como ${status}`);
       setShowSubmissionModal(false);
       fetchSubmissionsData();
@@ -735,7 +808,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
         }
         return item;
       }));
-      alert(`Estado de inspección local actualizado a ${stateStatus} (Modo Fallback).`);
+      showToast(`Estado de inspección local actualizado a ${stateStatus} (Modo Fallback).`, 'info');
       addAuditLog('SUBMISSION_STATUS', `Inspección ID ${selectedSubmission.id} marcada como ${status} (Local)`);
       setShowSubmissionModal(false);
     }
@@ -766,7 +839,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
     }
 
     if (success) {
-      alert('Inspección verificada por cuadrilla exitosamente.');
+      showToast('Inspección verificada por cuadrilla exitosamente.', 'success');
       addAuditLog('SUBMISSION_VERIFY', `Inspección ID ${selectedSubmission.id} verificada por Cuadrilla`);
       setShowSubmissionModal(false);
       fetchSubmissionsData();
@@ -782,7 +855,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
         }
         return item;
       }));
-      alert('Inspección verificada exitosamente (Modo Fallback).');
+      showToast('Inspección verificada exitosamente (Modo Fallback).', 'info');
       addAuditLog('SUBMISSION_VERIFY', `Inspección ID ${selectedSubmission.id} verificada por Cuadrilla (Local)`);
       setShowSubmissionModal(false);
     }
@@ -813,7 +886,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
             </a>
           )}
           
-          {(hasPermission('VIEW_FORM') || hasRole('INGENIERO_MECANICO') || hasRole('INGENIERO_HSQ')) && (
+          {(hasPermission('VIEW_FORM') || hasRole('INGENIERO_MECANICO') || hasRole('SUPERVISOR_HSEQ')) && (
             <a href="#inspecciones" className={`menu-item ${activeView === 'inspecciones' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveView('inspecciones'); }}>
               <IconActiveInspections />
               <span>Inspecciones Activas</span>
@@ -849,9 +922,13 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
               <span>Configuración</span>
             </a>
           )}
-          <a href="#soporte" className="menu-item" onClick={(e) => { e.preventDefault(); alert('Soporte técnico: soporte@autocheckaml.com'); }}>
+          <a href="#soporte" className="menu-item" onClick={(e) => { e.preventDefault(); showToast('Soporte técnico: soporte@autocheckaml.com', 'info'); }}>
             <IconSupport />
             <span>Soporte</span>
+          </a>
+          <a href="#salir" className="menu-item logout-menu-item" onClick={(e) => { e.preventDefault(); onLogout(); }} style={{ color: '#ef4444' }}>
+            <IconExit />
+            <span>Cerrar Sesión</span>
           </a>
         </div>
       </aside>
@@ -1014,9 +1091,11 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
               )}
             </div>
 
-            <button className="icon-setting-btn" aria-label="Ajustes" onClick={() => hasPermission('MANAGE_ROLES') && setActiveView('config')}>
-              <IconGear />
-            </button>
+            {hasPermission('MANAGE_ROLES') && (
+              <button className="icon-setting-btn" aria-label="Ajustes" onClick={() => setActiveView('config')}>
+                <IconGear />
+              </button>
+            )}
 
             <div className="admin-profile-box" style={{ borderLeft: '1px solid var(--admin-border)', paddingLeft: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
               <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--admin-text-main)' }}>{currentUser?.fullName || 'Administrador'}</span>
@@ -1220,6 +1299,9 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
                           <td className="cell-acciones">
                             <button className="btn-action-edit" title="Editar" onClick={() => handleOpenEditModal(u)}>
                               <IconPencil />
+                            </button>
+                            <button className="btn-action-view" style={{ color: '#2196F3' }} title="Cambiar Contraseña" onClick={() => handleOpenPasswordModal(u)}>
+                              <IconKey />
                             </button>
                             {u.id !== 1 && (
                               <button className="btn-action-view" style={{ color: 'var(--status-inop-text)' }} title="Eliminar" onClick={() => handleDeleteUser(u.id)}>
@@ -1796,6 +1878,69 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
                 Cerrar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== PASSWORD CHANGE MODAL ===== */}
+      {showPasswordModal && (
+        <div className="modal-backdrop">
+          <div className="modal-content" style={{ maxWidth: '450px' }}>
+            <div className="modal-header">
+              <h3>Cambiar Contraseña</h3>
+              <button className="modal-close-btn" onClick={() => setShowPasswordModal(false)}>
+                <IconClose />
+              </button>
+            </div>
+            <form onSubmit={handleChangePassword}>
+              <div className="modal-body">
+                <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
+                  <p style={{ margin: 0, fontSize: '14px', color: '#666' }}>
+                    <strong>Usuario:</strong> {passwordChangeUser?.username}
+                  </p>
+                  <p style={{ margin: '5px 0 0 0', fontSize: '14px', color: '#666' }}>
+                    <strong>Nombre:</strong> {passwordChangeUser?.fullName}
+                  </p>
+                </div>
+                <div className="modal-form-group">
+                  <label htmlFor="modal-newPassword">Nueva Contraseña *</label>
+                  <input
+                    type="password"
+                    id="modal-newPassword"
+                    required
+                    minLength="6"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Mínimo 6 caracteres"
+                  />
+                </div>
+                <div className="modal-form-group">
+                  <label htmlFor="modal-confirmPassword">Confirmar Contraseña *</label>
+                  <input
+                    type="password"
+                    id="modal-confirmPassword"
+                    required
+                    minLength="6"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Repita la contraseña"
+                  />
+                </div>
+                {newPassword && confirmPassword && newPassword !== confirmPassword && (
+                  <p style={{ color: 'var(--status-inop-text)', fontSize: '13px', margin: '10px 0' }}>
+                    ⚠️ Las contraseñas no coinciden
+                  </p>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn-modal-cancel" onClick={() => setShowPasswordModal(false)}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn-new-inspection-dark">
+                  Actualizar Contraseña
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
