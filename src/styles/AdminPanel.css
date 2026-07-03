@@ -869,7 +869,28 @@
   
   .inspections-table th, 
   .inspections-table td {
-    padding: 12px 10px;
+    padding: 10px 8px;
+    font-size: 12px;
+  }
+  
+  .table-responsive-container {
+    margin: 0 -16px;
+    padding: 0 16px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Prevent emails/long text from breaking table width layout */
+  .inspections-table td {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  .inspections-table td.cell-acciones {
+    max-width: none;
+    overflow: visible;
   }
 }
 

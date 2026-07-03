@@ -21,7 +21,7 @@ const FormComponent = ({ onSubmit }) => {
 
   const isHsq = userRoles.includes('SUPERVISOR_HSEQ');
   const isCuadrilla = userRoles.includes('CUADRILLA');
-  const isReadOnly = isCuadrilla;
+  const isReadOnly = false;
 
   // Helper para obtener las iniciales del nombre
   const getInitials = (name) => {
@@ -320,7 +320,7 @@ const FormComponent = ({ onSubmit }) => {
               transition: 'background 0.2s'
             }}
           >
-            📊 Volver al Panel
+            {isCuadrilla ? '🏠 Volver al Inicio' : '📊 Volver al Panel'}
           </button>
         </nav>
         <div style={{ marginTop: 'auto', borderTop: '1px solid #334155', paddingTop: '15px' }}>
@@ -370,7 +370,7 @@ const FormComponent = ({ onSubmit }) => {
           alignItems: 'center',
           gap: '8px'
         }}>
-          <span>👮</span> Modo Verificación de Cuadrilla (Lectura)
+          <span>👮</span> Modo Diligenciamiento de Cuadrilla
         </div>
       )}
 

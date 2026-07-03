@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useToast } from '../contexts/ToastContext';
 import { PERMISSION_MAP, CATEGORY_MAP } from '../constants/permissions';
+import { API_CONFIG } from '../config/api.config';
 import '../styles/AdminPanel.css';
 
 // ===== ICONS (Inline SVG to avoid dependency issues) =====
@@ -162,7 +163,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
   };
 
   const getApiUrl = (endpoint) => {
-    const base = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+    const base = API_CONFIG.BASE_URL;
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     return `${base}${cleanEndpoint}`;
   };
@@ -377,18 +378,23 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
     try {
       const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
       if (token) {
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/FormSubmissions/export/excel`, {
+        const response = await fetch(`${API_CONFIG.BASE_URL}/FormSubmissions/export/excel`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (response.ok) {
-          const blob = await response.blob();
+          const rawBlob = await response.blob();
+          const blob = new Blob([rawBlob], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement('a');
+          a.style.display = 'none';
           a.href = url;
           a.download = `inspecciones_${new Date().toISOString().slice(0,10)}.xlsx`;
           document.body.appendChild(a);
           a.click();
-          a.remove();
+          setTimeout(() => {
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+          }, 150);
           addAuditLog('EXPORT', 'Exportación de reporte de inspecciones a Excel');
           return;
         }
@@ -449,7 +455,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
     try {
       const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
       if (!token) return;
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const apiUrl = API_CONFIG.BASE_URL;
       
       if (modalMode === 'create') {
         const createRes = await fetch(`${apiUrl}/Users`, {
@@ -554,7 +560,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
       const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
       if (!token) return;
 
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const apiUrl = API_CONFIG.BASE_URL;
       const res = await fetch(`${apiUrl}/Users/${passwordChangeUser.id}/change-password`, {
         method: 'POST',
         headers: {
@@ -588,7 +594,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
     try {
       const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
       if (!token) return;
-      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/Users/${userId}`, {
+      const res = await fetch(`${API_CONFIG.BASE_URL}/Users/${userId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -608,7 +614,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
     try {
       const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
       if (!token) return;
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const apiUrl = API_CONFIG.BASE_URL;
       
       const method = hasPermission ? 'DELETE' : 'POST';
       const res = await fetch(`${apiUrl}/Roles/${roleId}/permissions/${permissionId}`, {
@@ -649,7 +655,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
     try {
       const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
       if (!token) return;
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const apiUrl = API_CONFIG.BASE_URL;
       
       const res = await fetch(`${apiUrl}/Crews`, {
         method: 'POST',
@@ -689,7 +695,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
     if (!selectedCrew) return;
     try {
       const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const apiUrl = API_CONFIG.BASE_URL;
       const res = await fetch(`${apiUrl}/Crews/${selectedCrew.id}/members/${userId}`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
@@ -718,7 +724,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
     if (!selectedCrew) return;
     try {
       const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const apiUrl = API_CONFIG.BASE_URL;
       const res = await fetch(`${apiUrl}/Crews/${selectedCrew.id}/members/${userId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
@@ -747,7 +753,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
   const handleOpenSubmissionDetail = async (id) => {
     try {
       const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const apiUrl = API_CONFIG.BASE_URL;
       const res = await fetch(`${apiUrl}/FormSubmissions/${id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -776,7 +782,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
     let success = false;
     try {
       const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const apiUrl = API_CONFIG.BASE_URL;
       const res = await fetch(`${apiUrl}/FormSubmissions/${selectedSubmission.id}/status`, {
         method: 'PUT',
         headers: {
@@ -825,7 +831,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
     let success = false;
     try {
       const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const apiUrl = API_CONFIG.BASE_URL;
       const res = await fetch(`${apiUrl}/FormSubmissions/${selectedSubmission.id}/verify`, {
         method: 'PUT',
         headers: {

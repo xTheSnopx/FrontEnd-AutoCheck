@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { formsApi } from '../api/forms.api';
 import '../styles/Dashboard.css';
 
 /* ===== ICONS ===== */
@@ -38,16 +39,68 @@ const IconBus = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M6 18v2"/><path d="M18 18v2"/><circle cx="7" cy="12" r="1"/><circle cx="17" cy="12" r="1"/><path d="M3 10h18"/></svg>
 );
 
-const IconBarChart = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="18" y="4" width="4" height="16" rx="1"/><rect x="10" y="10" width="4" height="10" rx="1"/><rect x="2" y="14" width="4" height="6" rx="1"/></svg>
-);
-
-const IconPlus = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-);
-
 export default function Dashboard({ onNewInspection, onLogout }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [lastSubmission, setLastSubmission] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    const fetchLast = async () => {
+      try {
+        const data = await formsApi.getAll({ pageSize: 1 });
+        if (active && data && data.items && data.items.length > 0) {
+          setLastSubmission(data.items[0]);
+        }
+      } catch (err) {
+        console.error("Error fetching last submission:", err);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    fetchLast();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const formatLastDate = (dateStr) => {
+    if (!dateStr) return 'Sin registros';
+    try {
+      const date = new Date(dateStr);
+      return date.toLocaleString('es-ES', {
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch {
+      return 'Fecha inválida';
+    }
+  };
+
+  const getFleetStatus = (sub) => {
+    if (!sub) return { text: 'SIN INSPECCIÓN', style: { background: '#E2E8F0', color: '#4A5568' } };
+    const status = sub.status || '';
+    switch (status.toLowerCase()) {
+      case 'completado':
+      case 'verificado':
+      case 'approved':
+        return { text: 'OPERATIVO', style: { background: '#d4edda', color: '#155724' } };
+      case 'rechazado':
+      case 'rejected':
+      case 'inoperativo':
+        return { text: 'INOPERATIVO', style: { background: '#f8d7da', color: '#721c24' } };
+      case 'pendiente':
+      case 'pending':
+      case 'en proceso':
+      default:
+        return { text: 'PENDIENTE', style: { background: '#fff3cd', color: '#856404' } };
+    }
+  };
+
+  const statusInfo = getFleetStatus(lastSubmission);
 
   return (
     <div className="dashboard">
@@ -118,7 +171,9 @@ export default function Dashboard({ onNewInspection, onLogout }) {
             <div className="dash-summary-icon"><IconCalendarCheck /></div>
             <div className="dash-summary-info">
               <span className="dash-summary-label">Última Inspección</span>
-              <span className="dash-summary-value">24 Oct, 08:45 AM</span>
+              <span className="dash-summary-value">
+                {loading ? 'Cargando...' : formatLastDate(lastSubmission?.createdAt)}
+              </span>
             </div>
           </div>
 
@@ -126,23 +181,16 @@ export default function Dashboard({ onNewInspection, onLogout }) {
             <div className="dash-summary-icon"><IconBus /></div>
             <div className="dash-summary-info">
               <span className="dash-summary-label">Estado de Flota</span>
-              <span className="dash-summary-badge">OPERATIVO</span>
+              <span 
+                className="dash-summary-badge"
+                style={statusInfo.style}
+              >
+                {loading ? 'CARGANDO...' : statusInfo.text}
+              </span>
             </div>
           </div>
         </div>
       </main>
-
-      {/* ===== BOTTOM NAVIGATION ===== */}
-      <nav className="dash-bottom-nav">
-        <button className="dash-nav-item active">
-          <IconBarChart />
-          <span>Panel</span>
-        </button>
-        <button className="dash-nav-item" onClick={onNewInspection}>
-          <IconPlus />
-          <span>Nueva Inspección</span>
-        </button>
-      </nav>
     </div>
   );
 }
