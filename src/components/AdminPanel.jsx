@@ -130,6 +130,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
   const [submissionComments, setSubmissionComments] = useState('');
   const [rectifierObservations, setRectifierObservations] = useState('');
   const [requiresReview, setRequiresReview] = useState(false);
+  const [hseqObservations, setHseqObservations] = useState('');
 
   // Crews State
   const [crews, setCrews] = useState([]);
@@ -916,6 +917,46 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
       } else {
         const err = await res.json();
         showToast(err.message || 'Error al aprobar', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Registrar revisión HSEQ (no cambia estado del vehículo)
+  const handleHSEQReview = async () => {
+    if (!selectedSubmission) return;
+    if (!hseqObservations.trim()) {
+      showToast('Por favor ingrese las observaciones de la revisión', 'warning');
+      return;
+    }
+    try {
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+      const apiUrl = API_CONFIG.BASE_URL;
+      const res = await fetch(`${apiUrl}/formsubmissions/${selectedSubmission.id}/hseq-review`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ observations: hseqObservations })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        showToast(data.message, 'success');
+        addAuditLog('HSEQ_REVIEW', `Revisión HSEQ registrada para inspección ID ${selectedSubmission.id}`);
+        setHseqObservations(''); // Limpiar campo
+        fetchSubmissionsData();
+        // Refresh modal data
+        const updated = await fetch(`${apiUrl}/formsubmissions/${selectedSubmission.id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (updated.ok) {
+          setSelectedSubmission(await updated.json());
+        }
+      } else {
+        const err = await res.json();
+        showToast(err.message || 'Error al registrar revisión HSEQ', 'error');
       }
     } catch (err) {
       console.error(err);
@@ -1998,12 +2039,12 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
                   <span className={`status-badge ${selectedSubmission.status?.toLowerCase()}`}>{selectedSubmission.status || 'Pendiente'}</span>
                   {selectedSubmission.approvedByIngenieroId && (
                     <span style={{ marginLeft: '8px', fontSize: '11px', color: '#16a34a', background: '#dcfce7', padding: '2px 8px', borderRadius: '12px' }}>
-                      ✓ Ing. Mecánico
+                      ✓ Aprobado Ing. Mecánico
                     </span>
                   )}
-                  {selectedSubmission.approvedBySupervisorId && (
-                    <span style={{ marginLeft: '8px', fontSize: '11px', color: '#16a34a', background: '#dcfce7', padding: '2px 8px', borderRadius: '12px' }}>
-                      ✓ Supervisor HSEQ
+                  {selectedSubmission.reviewedByHSEQId && (
+                    <span style={{ marginLeft: '8px', fontSize: '11px', color: '#1e40af', background: '#dbeafe', padding: '2px 8px', borderRadius: '12px' }}>
+                      📋 Revisado HSEQ
                     </span>
                   )}
                 </div>
@@ -2044,15 +2085,14 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
               )}
 
               <div style={{ borderTop: '1px solid var(--admin-border)', marginTop: '20px', paddingTop: '15px' }}>
-                {/* Double Approval Section */}
-                {(hasRole('INGENIERO_MECANICO') || hasRole('SUPERVISOR_HSEQ') || hasRole('DEV') || hasRole('SOFTWARE')) && (
+                {/* Aprobación por Ingeniero Mecánico (cambia estado a OPERATIVO) */}
+                {(hasRole('INGENIERO_MECANICO') || hasRole('DEV') || hasRole('SOFTWARE')) && (
                   <div style={{ marginBottom: '15px', backgroundColor: '#f0fdf4', padding: '15px', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
-                    <h4 style={{ margin: '0 0 10px 0', color: '#166534' }}>Aprobación de Inspección</h4>
+                    <h4 style={{ margin: '0 0 10px 0', color: '#166534' }}>Aprobación de Inspección (Ing. Mecánico)</h4>
                     <div style={{ fontSize: '12px', color: '#666', marginBottom: '10px' }}>
-                      Se requieren ambas aprobaciones (Ingeniero Mecánico + Supervisor HSEQ) para que el vehículo esté OPERATIVO.
+                      La aprobación del Ingeniero Mecánico cambia el estado del vehículo a OPERATIVO.
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                      {/* Fila Ingeniero Mecánico */}
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                         <button
                           className="btn-new-inspection-dark"
@@ -2060,7 +2100,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
                           onClick={() => handleApproveSubmission('Ingeniero')}
                           disabled={selectedSubmission.approvedByIngenieroId && !hasRole('DEV') && !hasRole('SOFTWARE')}
                         >
-                          {selectedSubmission.approvedByIngenieroId ? '✓ Aprobado (Ing. Mecánico)' : 'Aprobar (Ing. Mecánico)'}
+                          {selectedSubmission.approvedByIngenieroId ? '✓ OPERATIVO (Aprobado por Ing. Mecánico)' : 'Aprobar → OPERATIVO'}
                         </button>
                         {selectedSubmission.approvedByIngenieroId && (hasRole('INGENIERO_MECANICO') || hasRole('DEV') || hasRole('SOFTWARE')) && (
                           <button
@@ -2068,47 +2108,69 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
                             style={{ backgroundColor: '#dc2626', fontSize: '12px', minWidth: '120px' }}
                             onClick={() => handleRejectSubmission('Ingeniero')}
                           >
-                            ✗ Desaprobar
+                            ✗ Rechazar
                           </button>
                         )}
                       </div>
-                      {/* Fila Supervisor HSEQ */}
+                      {/* Botón Revisión (solo Ing. Mecánico) */}
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                         <button
                           className="btn-new-inspection-dark"
-                          style={{ backgroundColor: selectedSubmission.approvedBySupervisorId ? '#86efac' : '#059669', flex: 1, fontSize: '12px' }}
-                          onClick={() => handleApproveSubmission('Supervisor')}
-                          disabled={selectedSubmission.approvedBySupervisorId && !hasRole('DEV') && !hasRole('SOFTWARE')}
+                          style={{
+                            backgroundColor: selectedSubmission.status === 'EN REVISION' ? '#f59e0b' : '#d97706',
+                            flex: 1,
+                            fontSize: '12px'
+                          }}
+                          onClick={() => handleSetRevision(selectedSubmission.status !== 'EN REVISION')}
                         >
-                          {selectedSubmission.approvedBySupervisorId ? '✓ Aprobado (Supervisor HSEQ)' : 'Aprobar (Supervisor HSEQ)'}
+                          {selectedSubmission.status === 'EN REVISION' ? '⏸ EN REVISIÓN - Quitar' : '⚠ Poner EN REVISIÓN'}
                         </button>
-                        {selectedSubmission.approvedBySupervisorId && (hasRole('SUPERVISOR_HSEQ') || hasRole('DEV') || hasRole('SOFTWARE')) && (
-                          <button
-                            className="btn-new-inspection-dark"
-                            style={{ backgroundColor: '#dc2626', fontSize: '12px', minWidth: '120px' }}
-                            onClick={() => handleRejectSubmission('Supervisor')}
-                          >
-                            ✗ Desaprobar
-                          </button>
-                        )}
                       </div>
-                      {/* Fila Revisión (solo Ing. Mecánico) */}
-                      {(hasRole('INGENIERO_MECANICO') || hasRole('DEV') || hasRole('SOFTWARE')) && (
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                          <button
-                            className="btn-new-inspection-dark"
-                            style={{
-                              backgroundColor: selectedSubmission.status === 'EN REVISION' ? '#f59e0b' : '#d97706',
-                              flex: 1,
-                              fontSize: '12px'
-                            }}
-                            onClick={() => handleSetRevision(selectedSubmission.status !== 'EN REVISION')}
-                          >
-                            {selectedSubmission.status === 'EN REVISION' ? '⏸ EN REVISIÓN - Quitar' : '⚠ REVISIÓN (Ing. Mecánico)'}
-                          </button>
-                        </div>
-                      )}
                     </div>
+                  </div>
+                )}
+
+                {/* Revisión HSEQ (NO cambia estado, solo registra observaciones) */}
+                {(hasRole('SUPERVISOR_HSEQ') || hasRole('DEV') || hasRole('SOFTWARE')) && (
+                  <div style={{ marginBottom: '15px', backgroundColor: '#eff6ff', padding: '15px', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
+                    <h4 style={{ margin: '0 0 10px 0', color: '#1e40af' }}>Revisión HSEQ</h4>
+                    <div style={{ fontSize: '12px', color: '#666', marginBottom: '10px' }}>
+                      La revisión HSEQ queda registrada pero <strong>NO afecta</strong> el estado del vehículo.
+                    </div>
+
+                    {/* Mostrar revisiones anteriores */}
+                    {selectedSubmission.observationsByHSEQ && (
+                      <div style={{ backgroundColor: '#dbeafe', padding: '10px', borderRadius: '6px', marginBottom: '10px', fontSize: '12px' }}>
+                        <strong>Revisiones anteriores:</strong>
+                        <pre style={{ margin: '5px 0 0 0', whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>
+                          {selectedSubmission.observationsByHSEQ}
+                        </pre>
+                      </div>
+                    )}
+
+                    {selectedSubmission.reviewedByHSEQId && (
+                      <div style={{ fontSize: '11px', color: '#1e40af', marginBottom: '10px' }}>
+                        ✓ Última revisión: {selectedSubmission.reviewedByHSEQAt ? new Date(selectedSubmission.reviewedByHSEQAt).toLocaleString('es-CO') : 'N/A'}
+                      </div>
+                    )}
+
+                    <div className="modal-form-group">
+                      <label style={{ fontSize: '12px' }}>Nueva observación de revisión:</label>
+                      <textarea
+                        className="form-input"
+                        style={{ width: '100%', minHeight: '60px', padding: '8px', border: '1px solid #93c5fd', borderRadius: '6px', fontFamily: 'inherit', fontSize: '13px' }}
+                        value={hseqObservations}
+                        onChange={(e) => setHseqObservations(e.target.value)}
+                        placeholder="Escriba sus observaciones de la revisión..."
+                      />
+                    </div>
+                    <button
+                      className="btn-new-inspection-dark"
+                      style={{ marginTop: '10px', width: '100%', backgroundColor: '#2563eb', fontSize: '12px' }}
+                      onClick={handleHSEQReview}
+                    >
+                      📋 Registrar Revisión HSEQ
+                    </button>
                   </div>
                 )}
 
