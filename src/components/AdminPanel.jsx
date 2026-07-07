@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useToast } from '../contexts/ToastContext';
 import { PERMISSION_MAP, CATEGORY_MAP } from '../constants/permissions';
 import { API_CONFIG } from '../config/api.config';
+import FormTemplateEditor from './FormTemplateEditor';
+import VehicleTypesManager from './VehicleTypesManager';
 import '../styles/AdminPanel.css';
 
 // ===== ICONS (Inline SVG to avoid dependency issues) =====
@@ -89,7 +91,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
   const [filterPlaca, setFilterPlaca] = useState('');
   const [filterEstado, setFilterEstado] = useState('Todos los estados');
   
-  // Navigation tabs: 'panel' | 'users' | 'inspecciones' | 'flota' | 'bitacora' | 'reportes' | 'config'
+  // Navigation tabs: 'panel' | 'users' | 'inspecciones' | 'flota' | 'bitacora' | 'reportes' | 'config' | 'form-editor' | 'vehicle-types'
   const [activeView, setActiveView] = useState('panel');
   const [currentUser, setCurrentUser] = useState(null);
   
@@ -147,6 +149,11 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
   const [passwordChangeUser, setPasswordChangeUser] = useState(null);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Reject Modal State
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectRoleType, setRejectRoleType] = useState('');
+  const [rejectReason, setRejectReason] = useState('');
 
   // Local Session Audit Timeline simulation
   const [auditLogs, setAuditLogs] = useState([]);
@@ -237,7 +244,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
 
   const fetchSubmissionsData = async () => {
     try {
-      const response = await adminFetch(getApiUrl('/FormSubmissions?pageSize=100'));
+      const response = await adminFetch(getApiUrl('/formsubmissions?pageSize=100'));
 
       if (response.ok) {
         const data = await response.json();
@@ -247,12 +254,18 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
           const apiInspections = data.items.map(sub => {
             let plate = 'N/A';
             let observations = sub.observationsByRespondent || 'Sin observaciones';
-            
+
             if (sub.answers && Array.isArray(sub.answers)) {
               const plateResp = sub.answers.find(r => r.formFieldLabel && r.formFieldLabel.toLowerCase().includes('placa'));
               if (plateResp) plate = plateResp.fieldValue;
             }
-            
+
+            // Si está INOPERATIVO y hay motivo de rechazo, mostrarlo como observación
+            let displayObservations = observations;
+            if (sub.status === 'INOPERATIVO' && sub.observationsByRectifier) {
+              displayObservations = sub.observationsByRectifier;
+            }
+
             return {
               id: sub.id,
               fecha: new Date(sub.createdAt).toLocaleString('es-ES', {
@@ -262,11 +275,13 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
                 hour: '2-digit',
                 minute: '2-digit'
               }),
-              placa: plate !== 'N/A' ? plate : 'FLT-' + (1000 + (sub.id % 9000)),
+              placa: plate !== 'N/A' ? plate : 'N/A',
               operador: sub.submittedByUserName || 'Operador',
-              observaciones: observations,
-              estado: sub.status === 'Approved' ? 'OPERATIVO' : sub.status === 'Pending' ? 'PROGRAMADO' : 'INOPERATIVO',
-              answers: sub.answers || []
+              observaciones: displayObservations,
+              fallaDetectada: sub.observationsByRectifier || '',
+              estado: sub.status || 'Pendiente',
+              answers: sub.answers || [],
+              attachments: sub.attachments || []
             };
           });
 
@@ -282,7 +297,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
             return {
               id: sub.id,
               title: sub.status === 'Pending' ? 'Inspección Pendiente' : 'Nueva Inspección',
-              message: `Vehículo: ${plate !== 'N/A' ? plate : 'FLT-' + (1000 + (sub.id % 9000))}. Diligenciado por ${sub.submittedByUserName || 'Operador'}.`,
+              message: `Vehículo: ${plate !== 'N/A' ? plate : 'N/A'}. Diligenciado por ${sub.submittedByUserName || 'Operador'}.`,
               time: new Date(sub.createdAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
               read: false,
               submissionId: sub.id
@@ -378,7 +393,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
     try {
       const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
       if (token) {
-        const response = await fetch(`${API_CONFIG.BASE_URL}/FormSubmissions/export/excel`, {
+        const response = await fetch(`${API_CONFIG.BASE_URL}/formsubmissions/export/excel`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (response.ok) {
@@ -417,7 +432,36 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
     link.remove();
     addAuditLog('EXPORT', 'Exportación de reporte local a CSV');
   };
-  
+
+  const handleExportPDF = async () => {
+    try {
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+      if (token) {
+        const response = await fetch(`${API_CONFIG.BASE_URL}/formsubmissions/export/pdf`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const rawBlob = await response.blob();
+          const blob = new Blob([rawBlob], { type: 'application/pdf' });
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.style.display = 'none';
+          a.href = url;
+          a.download = `inspecciones_${new Date().toISOString().slice(0,10)}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => {
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+          }, 150);
+          addAuditLog('EXPORT', 'Exportación de reporte de inspecciones a PDF');
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   // Users actions
   const handleOpenCreateModal = () => {
     setModalMode('create');
@@ -749,12 +793,33 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
     }
   };
 
+  const handleDeleteSubmission = async (submissionId) => {
+    if (!window.confirm('¿Está seguro de ELIMINAR esta inspección? Esta acción no se puede deshacer.')) return;
+    try {
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+      if (!token) return;
+      const res = await fetch(`${API_CONFIG.BASE_URL}/formsubmissions/${submissionId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        showToast('Inspección eliminada exitosamente', 'success');
+        addAuditLog('SUBMISSION_DELETE', `Inspección ID ${submissionId} eliminada`);
+        fetchSubmissionsData();
+      } else {
+        showToast('No se pudo eliminar la inspección (solo Admin/DEV)', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   // Submissions state updates
   const handleOpenSubmissionDetail = async (id) => {
     try {
       const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
       const apiUrl = API_CONFIG.BASE_URL;
-      const res = await fetch(`${apiUrl}/FormSubmissions/${id}`, {
+      const res = await fetch(`${apiUrl}/formsubmissions/${id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -783,7 +848,7 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
     try {
       const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
       const apiUrl = API_CONFIG.BASE_URL;
-      const res = await fetch(`${apiUrl}/FormSubmissions/${selectedSubmission.id}/status`, {
+      const res = await fetch(`${apiUrl}/formsubmissions/${selectedSubmission.id}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -801,13 +866,14 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
       console.error(err);
     }
 
-    const stateStatus = status === 'Approved' ? 'OPERATIVO' : status === 'Rejected' ? 'INOPERATIVO' : 'PROGRAMADO';
+    // Mapear estado según lo que envía el backend
+    const stateStatus = status === 'Approved' ? 'OPERATIVO' : status === 'Rejected' ? 'INOPERATIVO' : 'Pendiente';
 
     if (success) {
-      showToast(`Estado actualizado a ${status} exitosamente.`, 'success');
-      addAuditLog('SUBMISSION_STATUS', `Inspección ID ${selectedSubmission.id} marcada como ${status}`);
+      showToast(`Estado actualizado a ${stateStatus} exitosamente.`, 'success');
+      addAuditLog('SUBMISSION_STATUS', `Inspección ID ${selectedSubmission.id} marcada como ${stateStatus}`);
       setShowSubmissionModal(false);
-      fetchSubmissionsData();
+      fetchSubmissionsData(); // Recargar datos del servidor para obtener estado real
     } else {
       // Fallback local update for mocked data
       setInspections(prev => prev.map(item => {
@@ -821,18 +887,47 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
         return item;
       }));
       showToast(`Estado de inspección local actualizado a ${stateStatus} (Modo Fallback).`, 'info');
-      addAuditLog('SUBMISSION_STATUS', `Inspección ID ${selectedSubmission.id} marcada como ${status} (Local)`);
+      addAuditLog('SUBMISSION_STATUS', `Inspección ID ${selectedSubmission.id} marcada como ${stateStatus} (Local)`);
       setShowSubmissionModal(false);
+    }
+  };
+
+  const handleApproveSubmission = async (roleType) => {
+    if (!selectedSubmission) return;
+    try {
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+      const apiUrl = API_CONFIG.BASE_URL;
+      const res = await fetch(`${apiUrl}/formsubmissions/${selectedSubmission.id}/approve`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        showToast(data.message, 'success');
+        addAuditLog('SUBMISSION_APPROVE', `Inspección ID ${selectedSubmission.id} aprobada por ${roleType}`);
+        fetchSubmissionsData();
+        // Refresh modal data
+        const updated = await fetch(`${apiUrl}/formsubmissions/${selectedSubmission.id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (updated.ok) {
+          setSelectedSubmission(await updated.json());
+        }
+      } else {
+        const err = await res.json();
+        showToast(err.message || 'Error al aprobar', 'error');
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
   const handleVerifySubmission = async () => {
     if (!selectedSubmission) return;
-    let success = false;
     try {
       const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
       const apiUrl = API_CONFIG.BASE_URL;
-      const res = await fetch(`${apiUrl}/FormSubmissions/${selectedSubmission.id}/verify`, {
+      const res = await fetch(`${apiUrl}/formsubmissions/${selectedSubmission.id}/verify`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -844,32 +939,96 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
         })
       });
       if (res.ok) {
-        success = true;
+        showToast('Inspección verificada exitosamente.', 'success');
+        addAuditLog('SUBMISSION_VERIFY', `Inspección ID ${selectedSubmission.id} verificada`);
+        setShowSubmissionModal(false);
+        fetchSubmissionsData();
+      } else {
+        const err = await res.json();
+        showToast(err.message || 'Error al verificar', 'error');
       }
     } catch (err) {
       console.error(err);
+      showToast('Error de conexión al verificar', 'error');
     }
+  };
 
-    if (success) {
-      showToast('Inspección verificada por cuadrilla exitosamente.', 'success');
-      addAuditLog('SUBMISSION_VERIFY', `Inspección ID ${selectedSubmission.id} verificada por Cuadrilla`);
-      setShowSubmissionModal(false);
-      fetchSubmissionsData();
-    } else {
-      // Fallback local update for mocked data
-      setInspections(prev => prev.map(item => {
-        if (item.id === selectedSubmission.id) {
-          return {
-            ...item,
-            observaciones: rectifierObservations || item.observaciones,
-            estado: 'OPERATIVO'
-          };
+  const handleSetRevision = async (inRevision) => {
+    if (!selectedSubmission) return;
+    try {
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+      const apiUrl = API_CONFIG.BASE_URL;
+      const res = await fetch(`${apiUrl}/formsubmissions/${selectedSubmission.id}/revision`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ inRevision })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        showToast(data.message || (inRevision ? 'Inspección puesta EN REVISIÓN' : 'Inspección quitada de revisión'), 'success');
+        addAuditLog('SUBMISSION_REVISION', `Inspección ID ${selectedSubmission.id} ${inRevision ? 'puesta en revisión' : 'quitada de revisión'}`);
+        fetchSubmissionsData();
+        // Actualizar modal con datos frescos
+        const updated = await fetch(`${apiUrl}/formsubmissions/${selectedSubmission.id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (updated.ok) {
+          setSelectedSubmission(await updated.json());
         }
-        return item;
-      }));
-      showToast('Inspección verificada exitosamente (Modo Fallback).', 'info');
-      addAuditLog('SUBMISSION_VERIFY', `Inspección ID ${selectedSubmission.id} verificada por Cuadrilla (Local)`);
-      setShowSubmissionModal(false);
+      } else {
+        const err = await res.json();
+        showToast(err.message || 'Error al cambiar estado de revisión', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Error de conexión', 'error');
+    }
+  };
+
+  const handleRejectSubmission = async (roleType) => {
+    if (!selectedSubmission) return;
+    setRejectRoleType(roleType);
+    setRejectReason('');
+    setShowRejectModal(true);
+  };
+
+  const confirmRejectSubmission = async () => {
+    if (!selectedSubmission || !rejectRoleType) return;
+
+    try {
+      const token = localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+      const apiUrl = API_CONFIG.BASE_URL;
+      const res = await fetch(`${apiUrl}/formsubmissions/${selectedSubmission.id}/reject`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ reason: rejectReason || 'Sin motivo especificado' })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        showToast(data.message || 'Inspección rechazada/desaprobada', 'success');
+        addAuditLog('SUBMISSION_REJECT', `Inspección ID ${selectedSubmission.id} desaprobada por ${rejectRoleType}: ${rejectReason}`);
+        setShowRejectModal(false);
+        fetchSubmissionsData();
+        // Actualizar modal con datos frescos
+        const updated = await fetch(`${apiUrl}/formsubmissions/${selectedSubmission.id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (updated.ok) {
+          setSelectedSubmission(await updated.json());
+        }
+      } else {
+        const err = await res.json();
+        showToast(err.message || 'Error al desaprobar', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Error de conexión', 'error');
     }
   };
 
@@ -929,10 +1088,16 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
 
         <div className="sidebar-footer">
           {hasPermission('MANAGE_ROLES') && (
-            <a href="#config" className={`menu-item ${activeView === 'config' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveView('config'); }}>
-              <IconGear />
-              <span>Configuración</span>
-            </a>
+            <>
+              <a href="#form-editor" className={`menu-item ${activeView === 'form-editor' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveView('form-editor'); }}>
+                <IconGear />
+                <span>Configurar Formulario</span>
+              </a>
+              <a href="#vehicle-types" className={`menu-item ${activeView === 'vehicle-types' ? 'active' : ''}`} onClick={(e) => { e.preventDefault(); setActiveView('vehicle-types'); }}>
+                <IconTruck />
+                <span>Tipos de Vehículo</span>
+              </a>
+            </>
           )}
           <a href="#soporte" className="menu-item" onClick={(e) => { e.preventDefault(); showToast('Soporte técnico: soporte@autocheckaml.com', 'info'); }}>
             <IconSupport />
@@ -1209,6 +1374,9 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
                     <button className="btn-export-csv" onClick={handleExportCSV}>
                       <IconDownload /> Exportar Excel
                     </button>
+                    <button className="btn-export-csv" onClick={handleExportPDF} style={{marginLeft: '8px'}}>
+                      <IconDownload /> Exportar PDF
+                    </button>
                     <button className="btn-new-inspection-dark" onClick={onNewInspection}>
                       <IconPlus /> Nueva Inspección
                     </button>
@@ -1240,9 +1408,14 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
                             </span>
                           </td>
                           <td className="cell-acciones">
-                            <button className="btn-action-view" title="Ver detalle" onClick={() => handleOpenSubmissionDetail(item.id)}>
-                              <IconEye />
+                          <button className="btn-action-view" title="Ver detalle" onClick={() => handleOpenSubmissionDetail(item.id)}>
+                            <IconEye />
+                          </button>
+                          {(hasRole('DEV') || hasRole('SOFTWARE') || currentUser?.username?.toLowerCase() === 'admin') && (
+                            <button className="btn-action-view" style={{ color: '#ef4444' }} title="Eliminar Inspección" onClick={() => handleDeleteSubmission(item.id)}>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                             </button>
+                          )}
                           </td>
                         </tr>
                       ))}
@@ -1349,9 +1522,14 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
                             </span>
                           </td>
                           <td className="cell-acciones">
-                            <button className="btn-action-view" title="Ver Detalle / Gestionar" onClick={() => handleOpenSubmissionDetail(item.id)}>
-                              <IconEye /> Ver Respuestas
+                          <button className="btn-action-view" title="Ver Detalle / Gestionar" onClick={() => handleOpenSubmissionDetail(item.id)}>
+                            <IconEye /> Ver Respuestas
+                          </button>
+                          {(hasRole('DEV') || hasRole('SOFTWARE') || currentUser?.username?.toLowerCase() === 'admin') && (
+                            <button className="btn-action-view" style={{ color: '#ef4444', marginLeft: '8px' }} title="Eliminar Inspección" onClick={() => handleDeleteSubmission(item.id)}>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                             </button>
+                          )}
                           </td>
                         </tr>
                       ))}
@@ -1512,6 +1690,14 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
                 </section>
               </div>
             </div>
+          )}
+
+          {activeView === 'form-editor' && hasPermission('MANAGE_ROLES') && (
+            <FormTemplateEditor onBack={() => setActiveView('panel')} />
+          )}
+
+          {activeView === 'vehicle-types' && hasPermission('MANAGE_ROLES') && (
+            <VehicleTypesManager onBack={() => setActiveView('panel')} />
           )}
 
           {activeView === 'config' && hasPermission('MANAGE_ROLES') && (
@@ -1804,9 +1990,23 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
             <div className="modal-body" style={{ maxHeight: '65vh' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px', marginBottom: '15px', fontSize: '13px' }}>
                 <div><strong>Placa:</strong> {selectedSubmission.placa}</div>
+                <div><strong>Tipo de Vehículo:</strong> {selectedSubmission.answers?.find(a => a.formFieldLabel && a.formFieldLabel.toLowerCase().includes('tipo'))?.fieldValue || 'N/A'}</div>
                 <div><strong>Operador:</strong> {selectedSubmission.operador}</div>
                 <div><strong>Fecha:</strong> {selectedSubmission.fecha}</div>
-                <div><strong>Estado Actual:</strong> <span className={`status-badge ${selectedSubmission.estado?.toLowerCase()}`}>{selectedSubmission.estado}</span></div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <strong>Estado Actual:</strong>{' '}
+                  <span className={`status-badge ${selectedSubmission.estado?.toLowerCase()}`}>{selectedSubmission.estado}</span>
+                  {selectedSubmission.approvedByIngenieroId && (
+                    <span style={{ marginLeft: '8px', fontSize: '11px', color: '#16a34a', background: '#dcfce7', padding: '2px 8px', borderRadius: '12px' }}>
+                      ✓ Ing. Mecánico
+                    </span>
+                  )}
+                  {selectedSubmission.approvedBySupervisorId && (
+                    <span style={{ marginLeft: '8px', fontSize: '11px', color: '#16a34a', background: '#dcfce7', padding: '2px 8px', borderRadius: '12px' }}>
+                      ✓ Supervisor HSEQ
+                    </span>
+                  )}
+                </div>
               </div>
 
               <h4>Respuestas del Formulario:</h4>
@@ -1825,7 +2025,93 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
                 )}
               </div>
 
+              {selectedSubmission.attachments && selectedSubmission.attachments.length > 0 && (
+                <div style={{ marginTop: '15px', borderTop: '1px solid var(--admin-border)', paddingTop: '15px' }}>
+                  <div style={{ fontWeight: 600, fontSize: '13px', marginBottom: '8px', color: 'var(--admin-primary)' }}>Galería de Evidencias ({selectedSubmission.attachments.length} foto{selectedSubmission.attachments.length > 1 ? 's' : ''}):</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '10px' }}>
+                    {selectedSubmission.attachments.map((att, idx) => (
+                      <div key={idx} style={{ borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--admin-border)', cursor: 'pointer' }} onClick={() => window.open(att.fileDataBase64 ? `data:${att.contentType};base64,${att.fileDataBase64}` : `${API_CONFIG.BASE_URL.replace('/api', '')}${att.filePath}`, '_blank')}>
+                        <img
+                          src={att.fileDataBase64 ? `data:${att.contentType};base64,${att.fileDataBase64}` : `${API_CONFIG.BASE_URL.replace('/api', '')}${att.filePath}`}
+                          alt={att.description || "Evidencia"}
+                          style={{ width: '100%', height: '100px', objectFit: 'cover', display: 'block' }}
+                          onError={(e) => { e.target.style.display='none'; }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div style={{ borderTop: '1px solid var(--admin-border)', marginTop: '20px', paddingTop: '15px' }}>
+                {/* Double Approval Section */}
+                {(hasRole('INGENIERO_MECANICO') || hasRole('SUPERVISOR_HSEQ') || hasRole('DEV') || hasRole('SOFTWARE')) && (
+                  <div style={{ marginBottom: '15px', backgroundColor: '#f0fdf4', padding: '15px', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                    <h4 style={{ margin: '0 0 10px 0', color: '#166534' }}>Aprobación de Inspección</h4>
+                    <div style={{ fontSize: '12px', color: '#666', marginBottom: '10px' }}>
+                      Se requieren ambas aprobaciones (Ingeniero Mecánico + Supervisor HSEQ) para que el vehículo esté OPERATIVO.
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {/* Fila Ingeniero Mecánico */}
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <button
+                          className="btn-new-inspection-dark"
+                          style={{ backgroundColor: selectedSubmission.approvedByIngenieroId ? '#86efac' : '#16a34a', flex: 1, fontSize: '12px' }}
+                          onClick={() => handleApproveSubmission('Ingeniero')}
+                          disabled={selectedSubmission.approvedByIngenieroId && !hasRole('DEV') && !hasRole('SOFTWARE')}
+                        >
+                          {selectedSubmission.approvedByIngenieroId ? '✓ Aprobado (Ing. Mecánico)' : 'Aprobar (Ing. Mecánico)'}
+                        </button>
+                        {selectedSubmission.approvedByIngenieroId && (hasRole('INGENIERO_MECANICO') || hasRole('DEV') || hasRole('SOFTWARE')) && (
+                          <button
+                            className="btn-new-inspection-dark"
+                            style={{ backgroundColor: '#dc2626', fontSize: '12px', minWidth: '120px' }}
+                            onClick={() => handleRejectSubmission('Ingeniero')}
+                          >
+                            ✗ Desaprobar
+                          </button>
+                        )}
+                      </div>
+                      {/* Fila Supervisor HSEQ */}
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <button
+                          className="btn-new-inspection-dark"
+                          style={{ backgroundColor: selectedSubmission.approvedBySupervisorId ? '#86efac' : '#059669', flex: 1, fontSize: '12px' }}
+                          onClick={() => handleApproveSubmission('Supervisor')}
+                          disabled={selectedSubmission.approvedBySupervisorId && !hasRole('DEV') && !hasRole('SOFTWARE')}
+                        >
+                          {selectedSubmission.approvedBySupervisorId ? '✓ Aprobado (Supervisor HSEQ)' : 'Aprobar (Supervisor HSEQ)'}
+                        </button>
+                        {selectedSubmission.approvedBySupervisorId && (hasRole('SUPERVISOR_HSEQ') || hasRole('DEV') || hasRole('SOFTWARE')) && (
+                          <button
+                            className="btn-new-inspection-dark"
+                            style={{ backgroundColor: '#dc2626', fontSize: '12px', minWidth: '120px' }}
+                            onClick={() => handleRejectSubmission('Supervisor')}
+                          >
+                            ✗ Desaprobar
+                          </button>
+                        )}
+                      </div>
+                      {/* Fila Revisión (solo Ing. Mecánico) */}
+                      {(hasRole('INGENIERO_MECANICO') || hasRole('DEV') || hasRole('SOFTWARE')) && (
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <button
+                            className="btn-new-inspection-dark"
+                            style={{
+                              backgroundColor: selectedSubmission.status === 'EN REVISION' ? '#f59e0b' : '#d97706',
+                              flex: 1,
+                              fontSize: '12px'
+                            }}
+                            onClick={() => handleSetRevision(selectedSubmission.status !== 'EN REVISION')}
+                          >
+                            {selectedSubmission.status === 'EN REVISION' ? '⏸ EN REVISIÓN - Quitar' : '⚠ REVISIÓN (Ing. Mecánico)'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Rectification / Verification by Crew (Cuadrilla) Section */}
                 {hasPermission('VERIFY_FORM') && (
                   <div style={{ marginBottom: '15px', backgroundColor: '#fff8e1', padding: '15px', borderRadius: '8px' }}>
@@ -1947,6 +2233,124 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ===== REJECT/DESAPROBAR MODAL ===== */}
+      {showRejectModal && (
+        <div className="modal-backdrop" style={{ zIndex: 2000 }}>
+          <div className="modal-content" style={{ maxWidth: '480px', borderTop: '4px solid #dc2626' }}>
+            <div className="modal-header" style={{ backgroundColor: '#fef2f2', borderBottom: '1px solid #fecaca' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  backgroundColor: '#dc2626',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="15" y1="9" x2="9" y2="15"/>
+                    <line x1="9" y1="9" x2="15" y2="15"/>
+                  </svg>
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, color: '#991b1b', fontSize: '18px' }}>Desaprobar Inspección</h3>
+                  <p style={{ margin: '4px 0 0 0', color: '#b91c1c', fontSize: '13px' }}>
+                    {rejectRoleType === 'Ingeniero' ? 'Ingeniero Mecánico' : 'Supervisor HSEQ'}
+                  </p>
+                </div>
+              </div>
+              <button className="modal-close-btn" onClick={() => setShowRejectModal(false)} style={{ color: '#dc2626' }}>
+                <IconClose />
+              </button>
+            </div>
+            <div className="modal-body" style={{ padding: '20px' }}>
+              <div style={{
+                backgroundColor: '#fef3c7',
+                border: '1px solid #fcd34d',
+                borderRadius: '8px',
+                padding: '12px',
+                marginBottom: '20px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '10px'
+              }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" style={{ flexShrink: 0, marginTop: '2px' }}>
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/>
+                  <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+                <div style={{ fontSize: '13px', color: '#92400e' }}>
+                  <strong>Atención:</strong> Esta acción marcará el vehículo como <strong>INOPERATIVO</strong> y eliminará las aprobaciones anteriores.
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', fontWeight: 600, marginBottom: '8px', color: '#374151' }}>
+                  Motivo de la desaprobación <span style={{ color: '#dc2626' }}>*</span>
+                </label>
+                <textarea
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="Describa el motivo por el cual se desaprueba esta inspección..."
+                  style={{
+                    width: '100%',
+                    minHeight: '100px',
+                    padding: '12px',
+                    border: '2px solid #e5e7eb',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontFamily: 'inherit',
+                    resize: 'vertical',
+                    transition: 'border-color 0.2s',
+                    outline: 'none'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#dc2626'}
+                  onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                />
+              </div>
+
+              <div style={{
+                backgroundColor: '#f9fafb',
+                borderRadius: '8px',
+                padding: '12px',
+                fontSize: '13px',
+                color: '#6b7280'
+              }}>
+                <strong>Inspección:</strong> #{selectedSubmission?.id} - {selectedSubmission?.placa || 'N/A'}
+              </div>
+            </div>
+            <div className="modal-footer" style={{ backgroundColor: '#f9fafb', borderTop: '1px solid #e5e7eb', gap: '10px' }}>
+              <button
+                className="btn-modal-cancel"
+                onClick={() => setShowRejectModal(false)}
+                style={{ flex: 1 }}
+              >
+                Cancelar
+              </button>
+              <button
+                className="btn-new-inspection-dark"
+                onClick={confirmRejectSubmission}
+                disabled={!rejectReason.trim()}
+                style={{
+                  flex: 1,
+                  backgroundColor: rejectReason.trim() ? '#dc2626' : '#9ca3af',
+                  cursor: rejectReason.trim() ? 'pointer' : 'not-allowed'
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}>
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="15" y1="9" x2="9" y2="15"/>
+                  <line x1="9" y1="9" x2="15" y2="15"/>
+                </svg>
+                Confirmar Desaprobación
+              </button>
+            </div>
           </div>
         </div>
       )}
