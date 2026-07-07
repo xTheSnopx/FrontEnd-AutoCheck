@@ -1989,13 +1989,13 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
             </div>
             <div className="modal-body" style={{ maxHeight: '65vh' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px', marginBottom: '15px', fontSize: '13px' }}>
-                <div><strong>Placa:</strong> {selectedSubmission.placa}</div>
-                <div><strong>Tipo de Vehículo:</strong> {selectedSubmission.answers?.find(a => a.formFieldLabel && a.formFieldLabel.toLowerCase().includes('tipo'))?.fieldValue || 'N/A'}</div>
-                <div><strong>Operador:</strong> {selectedSubmission.operador}</div>
-                <div><strong>Fecha:</strong> {selectedSubmission.fecha}</div>
+                <div><strong>Placa:</strong> {selectedSubmission.answers?.find(a => a.formFieldLabel && a.formFieldLabel.toLowerCase().includes('placa'))?.fieldValue || selectedSubmission.activityLocation || 'N/A'}</div>
+                <div><strong>Tipo de Vehículo:</strong> {selectedSubmission.vehicleTypeName || selectedSubmission.answers?.find(a => a.formFieldLabel && a.formFieldLabel.toLowerCase().includes('tipo'))?.fieldValue || 'N/A'}</div>
+                <div><strong>Operador:</strong> {selectedSubmission.submittedByUserName || 'N/A'}</div>
+                <div><strong>Fecha:</strong> {selectedSubmission.activityDate ? new Date(selectedSubmission.activityDate).toLocaleDateString('es-CO') : 'N/A'}</div>
                 <div style={{ gridColumn: 'span 2' }}>
                   <strong>Estado Actual:</strong>{' '}
-                  <span className={`status-badge ${selectedSubmission.estado?.toLowerCase()}`}>{selectedSubmission.estado}</span>
+                  <span className={`status-badge ${selectedSubmission.status?.toLowerCase()}`}>{selectedSubmission.status || 'Pendiente'}</span>
                   {selectedSubmission.approvedByIngenieroId && (
                     <span style={{ marginLeft: '8px', fontSize: '11px', color: '#16a34a', background: '#dcfce7', padding: '2px 8px', borderRadius: '12px' }}>
                       ✓ Ing. Mecánico
@@ -2113,29 +2113,54 @@ export default function AdminPanel({ onLogout, onNewInspection }) {
                 )}
 
                 {/* Rectification / Verification by Crew (Cuadrilla) Section */}
-                {hasPermission('VERIFY_FORM') && (
+                {/* Visible para: Cuadrilla (editable), Ingeniero y Supervisor (solo lectura) */}
+                {(hasPermission('VERIFY_FORM') || hasRole('INGENIERO_MECANICO') || hasRole('SUPERVISOR_HSEQ') || hasRole('DEV') || hasRole('SOFTWARE')) && (
                   <div style={{ marginBottom: '15px', backgroundColor: '#fff8e1', padding: '15px', borderRadius: '8px' }}>
-                    <h4 style={{ margin: '0 0 10px 0', color: 'var(--status-prog-text)' }}>Verificación por Cuadrilla</h4>
+                    <h4 style={{ margin: '0 0 10px 0', color: 'var(--status-prog-text)' }}>
+                      Verificación por Cuadrilla
+                      {!hasPermission('VERIFY_FORM') && <span style={{ fontSize: '11px', fontWeight: 'normal', marginLeft: '8px', color: '#666' }}>(Solo lectura)</span>}
+                    </h4>
                     <div className="modal-form-group">
                       <label>Observaciones del Rectificador</label>
-                      <textarea 
-                        className="form-input" 
-                        style={{ width: '100%', minHeight: '60px', padding: '8px', border: '1px solid #ccc', borderRadius: '6px', fontFamily: 'inherit', fontSize: '13px' }}
-                        value={rectifierObservations} 
-                        onChange={(e) => setRectifierObservations(e.target.value)}
-                      />
+                      {hasPermission('VERIFY_FORM') ? (
+                        <textarea
+                          className="form-input"
+                          style={{ width: '100%', minHeight: '60px', padding: '8px', border: '1px solid #ccc', borderRadius: '6px', fontFamily: 'inherit', fontSize: '13px' }}
+                          value={rectifierObservations}
+                          onChange={(e) => setRectifierObservations(e.target.value)}
+                        />
+                      ) : (
+                        <div style={{
+                          width: '100%', minHeight: '40px', padding: '8px',
+                          border: '1px solid #ddd', borderRadius: '6px',
+                          backgroundColor: '#f5f5f5', fontSize: '13px',
+                          color: rectifierObservations ? '#333' : '#999'
+                        }}>
+                          {rectifierObservations || 'Sin observaciones registradas'}
+                        </div>
+                      )}
                     </div>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', fontSize: '13px' }}>
-                      <input 
-                        type="checkbox" 
-                        checked={requiresReview} 
-                        onChange={(e) => setRequiresReview(e.target.checked)}
-                      />
-                      Requiere revisión adicional por ingeniería
-                    </label>
-                    <button className="btn-new-inspection-dark" style={{ marginTop: '12px', width: '100%', backgroundColor: 'var(--status-prog-text)' }} onClick={handleVerifySubmission}>
-                      Verificar Inspección
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', fontSize: '13px' }}>
+                      {hasPermission('VERIFY_FORM') ? (
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <input
+                            type="checkbox"
+                            checked={requiresReview}
+                            onChange={(e) => setRequiresReview(e.target.checked)}
+                          />
+                          Requiere revisión adicional por ingeniería
+                        </label>
+                      ) : (
+                        <span>
+                          <strong>Requiere revisión:</strong> {requiresReview ? '✓ Sí' : '✗ No'}
+                        </span>
+                      )}
+                    </div>
+                    {hasPermission('VERIFY_FORM') && (
+                      <button className="btn-new-inspection-dark" style={{ marginTop: '12px', width: '100%', backgroundColor: 'var(--status-prog-text)' }} onClick={handleVerifySubmission}>
+                        Verificar Inspección
+                      </button>
+                    )}
                   </div>
                 )}
 
